@@ -1,9 +1,10 @@
 # Auditoria Inteligente de Fretes
 
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
-- [ ] Confirmar o ambiente que contém a base original de CT-es e as funcionalidades existentes — depende de orientação do usuário; este projeto está no modelo inicial e sem Cloud conectado.
+- [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.
+- [ ] Conectar a base externa original — depende da conexão pelo usuário em Configurações → Geral → External Supabase; não criar base paralela.
 - [ ] Obter a referência HTML aprovada citada no escopo — arquivo não enviado.
-- [ ] Confirmar dados de perfil necessários antes de implementar autenticação.
+- [x] Confirmar dados de perfil necessários antes de implementar autenticação — nome e equipe.
 - [ ] Estruturar dados e permissões preservando a base existente.
 - [ ] Implementar Tabelas de Frete com quatro abas e versionamento.
 - [ ] Implementar motor determinístico com memória de cálculo e testes.
