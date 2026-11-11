@@ -28,3 +28,6 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Render the approved freight-audit layout through one shared React view and six leaf routes; this preserves its navigation without duplicating its forms and visual structure.
+- Keep disconnected audit screens empty and saving unavailable; presentation work must not simulate persistent records or official financial calculations.
