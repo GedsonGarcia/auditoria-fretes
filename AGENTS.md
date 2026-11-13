@@ -29,5 +29,6 @@ use the editor.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
 
-- Render the approved freight-audit layout through one shared React view and six leaf routes; this preserves its navigation without duplicating its forms and visual structure.
+- Render the freight-audit layout through one shared React view and dedicated leaf routes, including settings; this preserves navigation without duplicating forms and visual structure.
 - Keep disconnected audit screens empty and saving unavailable; presentation work must not simulate persistent records or official financial calculations.
+- Keep CT-e detail records typed with explicit component availability states and verified HTTPS document links; this preserves zero versus missing values and prevents fabricated PDFs or calculations.

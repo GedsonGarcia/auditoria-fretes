@@ -11,14 +11,21 @@ import {
   TableProperties,
   Flag,
   X,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
+import { AuditSettings } from "./AuditSettings";
+import { CteDetails, CteRows } from "./CteDetails";
+import type { CteRecord } from "./cte-detail-data";
 import layout from "./approved-layout.json";
 import logo from "@/assets/rede-ancora-logo.asset.json";
 
 type LayoutNode =
   | string
   | { tag: string; attrs: Record<string, string | number | boolean>; children: LayoutNode[] };
-export type AuditView = "overview" | "upload" | "invoices" | "ctes" | "tables" | "alerts";
+export type AuditView =
+  "overview" | "upload" | "invoices" | "ctes" | "tables" | "alerts" | "settings";
 const destinations = {
   overview: "/",
   upload: "/importar-faturas",
@@ -26,6 +33,7 @@ const destinations = {
   ctes: "/auditoria-ctes",
   tables: "/tabelas-frete",
   alerts: "/central-alertas",
+  settings: "/configuracoes",
 } as const;
 const names = {
   overview: "Visão Geral",
@@ -34,6 +42,7 @@ const names = {
   ctes: "Auditoria de CT-es",
   tables: "Tabelas de Frete",
   alerts: "Central de Alertas",
+  settings: "Configurações",
 };
 const icons = {
   overview: LayoutDashboard,
@@ -42,6 +51,7 @@ const icons = {
   ctes: FileCheck,
   tables: TableProperties,
   alerts: Flag,
+  settings: Settings,
 };
 const commercial = [
   "FRETE VALOR (% SOBRE $ NF)",
@@ -130,7 +140,9 @@ function Options({ values }: { values: string[] }) {
     </>
   );
 }
-export function ApprovedAudit({ view }: { view: AuditView }) {
+export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: CteRecord[] }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [selectedCte, setSelectedCte] = useState<CteRecord | null>(null);
   const [modal, setModal] = useState<string | null>(null);
   const [tab, setTab] = useState("commercial");
   const [message, setMessage] = useState("");
@@ -157,8 +169,9 @@ export function ApprovedAudit({ view }: { view: AuditView }) {
     const cls = String(attrs["class"] || "");
     if (tag === "body")
       return (
-        <div key={key} className="app">
+        <div key={key} className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
           {children.map((c, i) => render(c, `${key}-${i}`))}
+          <CteDetails record={selectedCte} onClose={() => setSelectedCte(null)} />
           {message && (
             <div role="status" className="audit-status" onClick={() => setMessage("")}>
               {message}
@@ -168,6 +181,46 @@ export function ApprovedAudit({ view }: { view: AuditView }) {
       );
     if (cls.split(" ").includes("view") && id !== `view-${view}`) return null;
     if (cls === "modal-back" && modal !== id) return null;
+    if (cls === "content" && view === "settings")
+      return (
+        <div key={key} className="content">
+          <AuditSettings onCarrier={() => setModal("modal-carrier")} />
+        </div>
+      );
+    if (id === "cte-list") return <CteRows key={key} records={ctes} onSelect={setSelectedCte} />;
+    if (cls === "side-foot")
+      return (
+        <div key={key} className="side-foot">
+          <Button
+            variant="approved"
+            size="approved"
+            className={`settings-link ${view === "settings" ? "active" : ""}`}
+            asChild
+          >
+            <Link to="/configuracoes" title="Configurações">
+              <Settings />
+              <span className="nav-text">Configurações</span>
+            </Link>
+          </Button>
+          <span className="side-caption">REDE ANCORA · LOGÍSTICA NACIONAL</span>
+        </div>
+      );
+    if (cls === "topbar")
+      return (
+        <header key={key} className="topbar">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sidebar-toggle"
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+          </Button>
+          {children.map((c, i) => render(c, `${key}-${i}`))}
+        </header>
+      );
     if (id === "crumb-current") return <b key={key}>{names[view]}</b>;
     if (cls === "brand")
       return (
@@ -417,7 +470,10 @@ export function ApprovedAudit({ view }: { view: AuditView }) {
             key={key}
             variant="approved"
             size="approved"
-            className={`${cls} ${attrs["data-view"] && view === v ? "active" : ""}`}
+            className={`${cls
+              .split(" ")
+              .filter((name) => name !== "active")
+              .join(" ")} ${attrs["data-view"] && view === v ? "active" : ""}`}
             asChild
           >
             <Link to={destinations[v]} title={names[v]}>

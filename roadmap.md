@@ -1,5 +1,11 @@
 # Auditoria Inteligente de Fretes
 
+## Solicitação atual
+- [x] Adicionar Configurações ao rodapé do menu, com formulários de usuários e filiais, acesso ao cadastro existente de transportadoras e parâmetros previstos no escopo.
+- [x] Preparar detalhamento flutuante do CT-e com decomposição lado a lado e acesso ao DACTE real; testes com registros isolados, sem dados fictícios no painel.
+- [x] Atualizar apresentação conforme a referência enviada e validar navegação, formulários, recolhimento do menu e tamanhos de tela; sete testes aprovados e nenhuma falha observada no navegador.
+- [ ] Liberar gravação/edição dos cadastros e consultar CT-es/DACTEs reais — bloqueado pela conexão da base externa original; detalhamento não verificável com documentos reais enquanto a lista estiver vazia.
+
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
 - [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.
 - [ ] Conectar a base externa original — depende da conexão pelo usuário em Configurações → Geral → External Supabase; não criar base paralela.

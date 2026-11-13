@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditoriaCtesRouteImport } from './routes/auditoria-ctes'
 import { Route as AuditoriaFaturasRouteImport } from './routes/auditoria-faturas'
 import { Route as CentralAlertasRouteImport } from './routes/central-alertas'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as ImportarFaturasRouteImport } from './routes/importar-faturas'
 import { Route as TabelasFreteRouteImport } from './routes/tabelas-frete'
 
@@ -36,6 +37,11 @@ const CentralAlertasRoute = CentralAlertasRouteImport.update({
   path: '/central-alertas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ImportarFaturasRoute = ImportarFaturasRouteImport.update({
   id: '/importar-faturas',
   path: '/importar-faturas',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/auditoria-ctes': typeof AuditoriaCtesRoute
   '/auditoria-faturas': typeof AuditoriaFaturasRoute
   '/central-alertas': typeof CentralAlertasRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/importar-faturas': typeof ImportarFaturasRoute
   '/tabelas-frete': typeof TabelasFreteRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/auditoria-ctes': typeof AuditoriaCtesRoute
   '/auditoria-faturas': typeof AuditoriaFaturasRoute
   '/central-alertas': typeof CentralAlertasRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/importar-faturas': typeof ImportarFaturasRoute
   '/tabelas-frete': typeof TabelasFreteRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/auditoria-ctes': typeof AuditoriaCtesRoute
   '/auditoria-faturas': typeof AuditoriaFaturasRoute
   '/central-alertas': typeof CentralAlertasRoute
+  '/configuracoes': typeof ConfiguracoesRoute
   '/importar-faturas': typeof ImportarFaturasRoute
   '/tabelas-frete': typeof TabelasFreteRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/auditoria-ctes'
     | '/auditoria-faturas'
     | '/central-alertas'
+    | '/configuracoes'
     | '/importar-faturas'
     | '/tabelas-frete'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/auditoria-ctes'
     | '/auditoria-faturas'
     | '/central-alertas'
+    | '/configuracoes'
     | '/importar-faturas'
     | '/tabelas-frete'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/auditoria-ctes'
     | '/auditoria-faturas'
     | '/central-alertas'
+    | '/configuracoes'
     | '/importar-faturas'
     | '/tabelas-frete'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   AuditoriaCtesRoute: typeof AuditoriaCtesRoute
   AuditoriaFaturasRoute: typeof AuditoriaFaturasRoute
   CentralAlertasRoute: typeof CentralAlertasRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
   ImportarFaturasRoute: typeof ImportarFaturasRoute
   TabelasFreteRoute: typeof TabelasFreteRoute
 }
@@ -138,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CentralAlertasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/importar-faturas': {
       id: '/importar-faturas'
       path: '/importar-faturas'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuditoriaCtesRoute: AuditoriaCtesRoute,
   AuditoriaFaturasRoute: AuditoriaFaturasRoute,
   CentralAlertasRoute: CentralAlertasRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
   ImportarFaturasRoute: ImportarFaturasRoute,
   TabelasFreteRoute: TabelasFreteRoute,
 }
