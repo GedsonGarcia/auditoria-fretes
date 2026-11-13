@@ -4,13 +4,13 @@ import { ApprovedAudit } from "@/components/audit/ApprovedAudit";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Visão Executiva | Auditoria de Fretes · Rede ANCORA" },
+      { title: "Visão Geral | Auditoria de Fretes · Rede ANCORA" },
       {
         name: "description",
         content:
-          "Visão Executiva da Logística Nacional Rede ANCORA. Conciliação documental e comercial de fretes.",
+          "Visão Geral da Logística Nacional Rede ANCORA. Conciliação documental e comercial de fretes.",
       },
-      { property: "og:title", content: "Visão Executiva | Rede ANCORA" },
+      { property: "og:title", content: "Visão Geral | Rede ANCORA" },
       {
         property: "og:description",
         content: "Auditoria Inteligente de Fretes da Logística Nacional Rede ANCORA.",

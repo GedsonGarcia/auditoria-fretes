@@ -1844,3 +1844,17 @@ tbody tr:hover {
     padding-bottom: 18px;
   }
 }
+
+/* Ajustes: logotipo, gradiente do menu e transição de abas */
+.sidebar {
+  background: linear-gradient(165deg, color-mix(in oklab, var(--blue) 82%, var(--white)) 0%, var(--blue) 45%, color-mix(in oklab, var(--blue) 70%, black) 100%);
+  box-shadow: 4px 0 24px -8px color-mix(in oklab, var(--blue) 60%, transparent);
+}
+.brand { justify-content: center; }
+.brand-logo { width: 150px; height: 90px; }
+.nav .btn { transition: background-color .25s ease, color .25s ease, transform .25s ease; }
+.nav .btn:not(.active):hover { background: color-mix(in oklab, var(--white) 12%, transparent); transform: translateX(3px); }
+.view.active { animation: viewIn .45s cubic-bezier(.22,1,.36,1); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .view.active { animation: none; } }
+@media (max-width: 760px) { .brand-logo { width: 52px; height: 40px; } }

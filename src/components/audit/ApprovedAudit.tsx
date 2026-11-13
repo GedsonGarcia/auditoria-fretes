@@ -28,7 +28,7 @@ const destinations = {
   alerts: "/central-alertas",
 } as const;
 const names = {
-  overview: "Visão Executiva",
+  overview: "Visão Geral",
   upload: "Importar Faturas",
   invoices: "Auditoria de Faturas",
   ctes: "Auditoria de CT-es",
@@ -173,12 +173,9 @@ export function ApprovedAudit({ view }: { view: AuditView }) {
       return (
         <div key={key} className="brand">
           <img className="brand-logo" src={logo.url} alt="Rede ANCORA" />
-          <div>
-            <div className="brand-name">ANCORA</div>
-            <div className="brand-sub">LOGÍSTICA NACIONAL</div>
-          </div>
         </div>
       );
+    if (tag === "button" && attrs["data-view"] === "upload") return null;
     if (cls === "nav-ico" || id === "toast") return null;
     if (id === "commercial-components")
       return (
