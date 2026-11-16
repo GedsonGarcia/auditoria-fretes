@@ -15,6 +15,9 @@ import {
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { useAuditData } from "./AuditData";
+import { useAuditSession } from "./AuditSession";
+import { errorMessage } from "@/lib/audit-schemas";
 
 const sections = [
   { id: "users", label: "Usuários", icon: Users },
@@ -45,11 +48,31 @@ const forms = {
 type Registration = keyof typeof forms;
 
 export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
+  const { data, save, canWrite, admin, error } = useAuditData();
+  const { user } = useAuditSession();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Record<string, string> | null>(null);
+  const [page, setPage] = useState(1);
   const [section, setSection] = useState<Section>("users");
   const [registration, setRegistration] = useState<Registration | null>(null);
   const [search, setSearch] = useState("");
   const form =
     section === "users" || section === "branches" || section === "carriers" ? forms[section] : null;
+  const rows = (section === "branches" ? data.branches.map((b) => ({ key: b.id, cells: [b.code, b.name, b.cnpj, `${b.city} / ${b.state}`, b.active ? "Ativo" : "Inativo"], fields: { id: b.id, "Código da filial": b.code, "Nome da filial": b.name, CNPJ: b.cnpj, Município: b.city, UF: b.state, Endereço: b.address, active: String(b.active) } })) : section === "carriers" ? data.carriers.map((c) => ({ key: c.id, cells: [c.legal_name, c.display_name, c.cnpj, c.active ? "Ativo" : "Inativo", new Date(c.created_at).toLocaleDateString("pt-BR")], fields: {} })) : data.access.map((a) => ({ key: a.email, cells: [a.name, a.email, a.team, a.role === "admin" ? "Administrador" : a.role === "transportes" ? "Transportes" : "Consulta", a.active ? "Ativo" : "Inativo"], fields: { "Nome completo": a.name, "E-mail": a.email, Equipe: a.team, role: a.role, active: String(a.active) } }))).filter((r) => r.cells.join(" ").toLowerCase().includes(search.toLowerCase()));
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!registration) return;
+    const values = new FormData(event.currentTarget);
+    const get = (name: string) => String(values.get(name) ?? "").trim();
+    setBusy(true);
+    try {
+      if (registration === "branches") await save({ kind: "branch", value: { id: editing?.["id"], code: get("Código da filial"), name: get("Nome da filial"), cnpj: get("CNPJ"), city: get("Município"), state: get("UF"), address: get("Endereço"), active: get("active") === "true" } });
+      else await save({ kind: "access", value: { email: get("E-mail"), name: get("Nome completo"), team: get("Equipe"), role: get("role"), active: get("active") === "true" } });
+      setRegistration(null); setEditing(null); setMessage(registration === "users" ? "Acesso autorizado. O usuário pode entrar com o e-mail cadastrado." : "Filial salva.");
+    } catch (error) { setMessage(errorMessage(error)); }
+    finally { setBusy(false); }
+  }
   return (
     <section className="view active settings-view">
       <div className="page-head">
@@ -59,7 +82,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
           <p className="subtitle">Cadastros, parâmetros comerciais e governança.</p>
         </div>
         <span className="connection-badge">
-          <Link2 /> Base não conectada
+          <Link2 /> Lovable Cloud conectado
         </span>
       </div>
       <nav className="settings-tabs" aria-label="Áreas de configurações">
@@ -73,6 +96,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
             onClick={() => {
               setSection(id);
               setSearch("");
+              setPage(1);
             }}
           >
             <Icon />
@@ -83,13 +107,13 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
       <div className="connection-notice">
         <Link2 />
         <div>
-          <b>Conexão da base original pendente</b>
+          <b>{user ? data.roles.length ? "Cadastros operacionais conectados" : "Acesso pendente de autorização" : "Entre para consultar e cadastrar"}</b>
           <p>
-            Cadastros e alterações indisponíveis até conectar os registros e validar as permissões
-            de acesso.
+            A base original de CT-es e os documentos DACTE ainda aguardam integração.
           </p>
         </div>
       </div>
+      {(message || error) && <p role="status">{message || error}</p>}
       {form ? (
         <>
           <div className="settings-toolbar">
@@ -108,7 +132,9 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
                 variant="approved"
                 size="approved"
                 className="btn-primary"
+                disabled={section === "users" ? !admin : !canWrite}
                 onClick={() => {
+                  setEditing(null);
                   if (section === "carriers") onCarrier();
                   else if (section === "users" || section === "branches") setRegistration(section);
                 }}
@@ -128,24 +154,24 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                {rows.length ? rows.slice((page - 1) * 10, page * 10).map((r) => <tr key={r.key}>{r.cells.map((cell, i) => <td key={i}>{cell}{i === 0 && section !== "carriers" && <Button variant="outline" size="sm" disabled={section === "users" ? !admin : !canWrite} onClick={() => { setEditing(r.fields); setRegistration(section === "users" ? "users" : "branches"); }}>Editar</Button>}</td>)}</tr>) : <tr>
                   <td colSpan={form.columns.length} className="empty">
                     {search
                       ? "Nenhum cadastro disponível para a pesquisa."
-                      : "Nenhum cadastro disponível. Base não conectada."}
+                      : "Nenhum cadastro disponível."}
                   </td>
-                </tr>
+                </tr>}
               </tbody>
             </table>
           </div>
           <div className="pagination">
-            <span>0 registros</span>
+            <span>{rows.length} registros</span>
             <div>
-              <Button variant="approved" size="approved" aria-label="Página anterior" disabled>
+              <Button variant="approved" size="approved" aria-label="Página anterior" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
                 <ChevronLeft />
               </Button>
-              <span>0 de 0</span>
-              <Button variant="approved" size="approved" aria-label="Próxima página" disabled>
+              <span>{rows.length ? page : 0} de {Math.ceil(rows.length / 10)}</span>
+              <Button variant="approved" size="approved" aria-label="Próxima página" disabled={page * 10 >= rows.length} onClick={() => setPage((p) => p + 1)}>
                 <ChevronRight />
               </Button>
             </div>
@@ -215,8 +241,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
             </div>
           </div>
           <p className="connection-instructions">
-            No Lovable, abra Configurações → Geral → External Supabase → Connect para conectar a
-            base original.
+            Lovable Cloud conectado para cadastros e importações. Integração da base original de CT-es pendente.
           </p>
         </div>
       )}
@@ -229,9 +254,9 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
         <DialogContent className="registration-dialog">
           <DialogTitle>{registration ? forms[registration].title : "Cadastro"}</DialogTitle>
           <DialogDescription>
-            Gravação indisponível enquanto a base original não estiver conectada.
+            {registration === "users" ? "Autorize o acesso pelo e-mail corporativo. A senha não é definida neste cadastro." : "Cadastro operacional da filial."}
           </DialogDescription>
-          <form onSubmit={(event) => event.preventDefault()}>
+          <form key={editing?.["id"] || editing?.["E-mail"] || registration} onSubmit={submit}>
             <div className="form-grid">
               {registration &&
                 forms[registration].fields.map((field, index) => (
@@ -239,6 +264,8 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
                     <label htmlFor={`settings-field-${index}`}>{field}</label>
                     <input
                       id={`settings-field-${index}`}
+                      name={field}
+                      defaultValue={editing?.[field] ?? ""}
                       type={field === "E-mail" ? "email" : "text"}
                       required
                       maxLength={field === "UF" ? 2 : undefined}
@@ -248,21 +275,21 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
               {registration === "users" && (
                 <div className="field">
                   <label htmlFor="settings-role">Perfil de acesso</label>
-                  <select id="settings-role" defaultValue="">
+                  <select id="settings-role" name="role" defaultValue={editing?.["role"] ?? ""} required>
                     <option value="" disabled>
                       Selecionar
                     </option>
-                    <option>Consulta</option>
-                    <option>Transportes</option>
-                    <option>Administrador</option>
+                    <option value="consulta">Consulta</option>
+                    <option value="transportes">Transportes</option>
+                    <option value="admin">Administrador</option>
                   </select>
                 </div>
               )}
               <div className="field">
                 <label htmlFor="settings-status">Situação</label>
-                <select id="settings-status">
-                  <option>Ativo</option>
-                  <option>Inativo</option>
+                <select id="settings-status" name="active" defaultValue={editing?.["active"] ?? "true"}>
+                  <option value="true">Ativo</option>
+                  <option value="false">Inativo</option>
                 </select>
               </div>
             </div>
@@ -280,8 +307,8 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
                 variant="approved"
                 size="approved"
                 className="btn-primary"
-                disabled
-                title="Base não conectada"
+                type="submit"
+                disabled={busy || (registration === "users" ? !admin : !canWrite)}
               >
                 Salvar cadastro
               </Button>

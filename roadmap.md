@@ -1,16 +1,17 @@
 # Auditoria Inteligente de Fretes
 
 ## Solicitação atual
-- [ ] Criar a estrutura de cadastros, versões comerciais e importações no Lovable Cloud, com acesso restrito e sem replicar a base original de CT-es.
-- [ ] Vincular cadastros e importação aos dados reais, com login e validação de permissões.
+- [x] Criar a estrutura de cadastros, versões comerciais e importações no Lovable Cloud, com acesso restrito e sem replicar a base original de CT-es.
+- [x] Vincular cadastros e importação ao banco, com login e validação de permissões; 13 testes passaram e o bloqueio sem login foi verificado no navegador.
+- [ ] Validar gravação e importação com a conta administradora — aguarda primeiro login do responsável; não há usuários autenticados para emitir sessão de teste.
 - [x] Adicionar Configurações ao rodapé do menu, com formulários de usuários e filiais, acesso ao cadastro existente de transportadoras e parâmetros previstos no escopo.
 - [x] Preparar detalhamento flutuante do CT-e com decomposição lado a lado e acesso ao DACTE real; testes com registros isolados, sem dados fictícios no painel.
 - [x] Atualizar apresentação conforme a referência enviada e validar navegação, formulários, recolhimento do menu e tamanhos de tela; sete testes aprovados e nenhuma falha observada no navegador.
-- [ ] Liberar gravação/edição dos cadastros e consultar CT-es/DACTEs reais — bloqueado pela conexão da base externa original; detalhamento não verificável com documentos reais enquanto a lista estiver vazia.
+- [ ] Consultar CT-es/DACTEs reais — aguarda acesso à fonte original; o banco de cadastros está conectado, mas não substitui os documentos originais.
 
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
 - [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.
-- [ ] Conectar a base externa original — depende da conexão pelo usuário em Configurações → Geral → External Supabase; não criar base paralela.
+- [ ] Conectar a base externa original — aguarda acesso à fonte de CT-es; não criar base paralela.
 - [x] Obter a referência HTML aprovada citada no escopo.
 - [x] Reproduzir somente o layout aprovado, suas seis áreas e quatro abas, sem novas páginas ou recursos; manter dados vazios enquanto a base externa não estiver conectada.
 - [x] Validar navegação, abertura das abas, inclusão visual de faixas e apresentação em computador, tablet e celular; teste de rotas aprovado.

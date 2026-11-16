@@ -32,3 +32,6 @@ use the editor.
 - Render the freight-audit layout through one shared React view and dedicated leaf routes, including settings; this preserves navigation without duplicating forms and visual structure.
 - Keep disconnected audit screens empty and saving unavailable; presentation work must not simulate persistent records or official financial calculations.
 - Keep CT-e detail records typed with explicit component availability states and verified HTTPS document links; this preserves zero versus missing values and prevents fabricated PDFs or calculations.
+- Persist operational registrations and append-only tariff versions through authenticated server functions and database role checks; this keeps commercial writes restricted and historical versions immutable.
+- Store imported invoice references separately from the original CT-e document source and import each CSV atomically; this avoids a parallel CT-e base and partial or duplicated invoice batches.
+- Activate access only for verified identities using database-managed email authorizations; this prevents user metadata from granting privileges.

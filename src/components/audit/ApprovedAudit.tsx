@@ -22,6 +22,9 @@ import { CteDetails, CteRows } from "./CteDetails";
 import type { CteRecord } from "./cte-detail-data";
 import layout from "./approved-layout.json";
 import logo from "@/assets/rede-ancora-logo.asset.json";
+import { useAuditData } from "./AuditData";
+import { AuditSignIn, useAuditSession } from "./AuditSession";
+import { errorMessage } from "@/lib/audit-schemas";
 
 type LayoutNode =
   | string
@@ -143,6 +146,11 @@ function Options({ values }: { values: string[] }) {
   );
 }
 export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: CteRecord[] }) {
+  const { data, canWrite, save, importFile, error, loading } = useAuditData();
+  const { user } = useAuditSession();
+  const [busy, setBusy] = useState(false);
+  const [invoiceFilter, setInvoiceFilter] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState(false);
   const [selectedCte, setSelectedCte] = useState<CteRecord | null>(null);
   const [modal, setModal] = useState<string | null>(null);
@@ -160,8 +168,41 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [bands, setBands] = useState([{ weight: "", value: "" }]);
   const unavailable = () =>
     setMessage(
-      "Base não conectada. Esta operação depende dos registros e das permissões da operação.",
+      "A conciliação depende da base original de CT-es e das regras de cálculo. Os cadastros e a importação estão disponíveis para usuários autorizados.",
     );
+  const field = (id: string) => {
+    const element = document.getElementById(id);
+    return element instanceof HTMLInputElement || element instanceof HTMLSelectElement ? element.value.trim() : "";
+  };
+  async function persist(id: string) {
+    setBusy(true);
+    try {
+      if (id === "save-carrier") {
+        await save({ kind: "carrier", value: { id: field("carrier-edit-id") || undefined, legal_name: field("carrier-legal"), cnpj: field("carrier-cnpj"), display_name: field("carrier-short"), active: field("carrier-active") !== "Inativa" && field("carrier-active") !== "Inativo" } });
+      } else if (id === "square-save") {
+        await save({ kind: "square", value: { name: field("square-name"), state: field("square-uf"), code: field("square-code"), notes: field("square-notes") } });
+      } else if (id === "save-rule") {
+        const commercialValues = Object.fromEntries(commercial.map((name, i) => {
+          const input = document.getElementById(`commercial-${i}`);
+          const notApplicable = input instanceof HTMLInputElement && input.disabled;
+          const value = field(`commercial-${i}`);
+          return [name, { value: notApplicable || value === "" ? null : Number(value), state: notApplicable ? "not_applicable" : value === "" ? "missing" : "provided" }];
+        }));
+        const calculation_rules = commercial.map((component) => ({ component, type: document.querySelector<HTMLSelectElement>(`select[aria-label="Tipo de cálculo ${component}"]`)?.value ?? "", base: document.querySelector<HTMLSelectElement>(`select[aria-label="Base de cálculo ${component}"]`)?.value ?? "", formula: document.querySelector<HTMLInputElement>(`input[aria-label="Fórmula ${component}"]`)?.value ?? "", unit: document.querySelector<HTMLInputElement>(`input[aria-label="Unidade ${component}"]`)?.value ?? "", condition: document.querySelector<HTMLInputElement>(`input[aria-label="Condição ${component}"]`)?.value ?? "", min: document.querySelector<HTMLInputElement>(`input[aria-label="Mínimo ${component}"]`)?.value ?? "", max: document.querySelector<HTMLInputElement>(`input[aria-label="Máximo ${component}"]`)?.value ?? "", rounding: document.querySelector<HTMLSelectElement>(`select[aria-label="Arredondamento ${component}"]`)?.value ?? "", composition: document.querySelector<HTMLSelectElement>(`select[aria-label="Composição ${component}"]`)?.value ?? "" }));
+        await save({ kind: "version", value: { carrier_id: field("rule-carrier"), branch_id: field("rule-branch"), square_id: field("rule-square") || null, destination: field("rule-destination"), valid_from: field("rule-start"), valid_until: field("rule-end") || null, commercial: commercialValues, calculation_rules, weight_bands: bands.filter((b) => b.weight || b.value).map((b) => ({ weight: b.weight ? Number(b.weight) : NaN, value: b.value ? Number(b.value) : NaN })), configuration: { max_freight: max, mode: field("rule-mode"), min_goods: field("rule-min-goods") ? Number(field("rule-min-goods")) : null, composition: field("baseComposition"), weight_integration: field("weight-integration"), trigger: document.querySelector<HTMLSelectElement>('select[aria-label="Natureza do gatilho"]')?.value ?? "" }, notes: field("rule-notes"), previous_version_id: field("rule-edit-id") || null } });
+      } else if (file) {
+        const count = await importFile(file);
+        setMessage(`${count} fatura(s) importada(s). Associação aos CT-es e auditoria pendentes.`);
+        setFile(null);
+        return;
+      }
+      setMessage(id === "save-rule" ? "Tabela salva. Cálculos pendentes de parametrização e validação." : "Cadastro salvo.");
+      if (id !== "square-save") setModal(null);
+    } catch (error) { setMessage(errorMessage(error)); }
+    finally { setBusy(false); }
+  }
+  const money = (value: number | null) => value === null ? "Não informado" : value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const emptyRow = (columns: number) => <tr><td colSpan={columns} className="empty">{loading ? "Carregando registros…" : error || (user ? data.roles.length ? "Nenhum registro cadastrado." : "Acesso pendente de autorização do administrador." : "Entre para consultar os registros.")}</td></tr>;
   const close = () => {
     if (
       modal &&
@@ -172,10 +213,22 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     setModal(null);
   };
   function render(node: LayoutNode, key: string): ReactNode {
-    if (typeof node === "string") return node.includes("Campos legados preservados") ? null : node;
+    if (typeof node === "string") return node.includes("Campos legados preservados") ? null : node.replaceAll("Nenhum registro disponível. Base não conectada.", "Nenhum registro disponível.");
     const { tag, attrs, children } = node;
     const id = String(attrs["id"] || "");
     const cls = String(attrs["class"] || "");
+    if (cls === "topright") return null;
+    if (["carrier-list", "square-list", "rule-list", "invoice-list", "upload-history", "rule-history-list"].includes(id)) {
+      if (id === "carrier-list") return <tbody key={key}>{data.carriers.length ? data.carriers.map((c) => <tr key={c.id}><td>{c.legal_name}</td><td>{c.cnpj}</td><td>{c.display_name}</td><td>{new Date(c.created_at).toLocaleDateString("pt-BR")}</td><td>{c.active ? "Ativo" : "Inativo"}</td><td><Button variant="outline" disabled={!canWrite} onClick={() => { setModal("modal-carrier"); setTimeout(() => { for (const [id, value] of Object.entries({ "carrier-edit-id": c.id, "carrier-legal": c.legal_name, "carrier-cnpj": c.cnpj, "carrier-short": c.display_name, "carrier-active": c.active ? "Ativo" : "Inativo" })) { const e = document.getElementById(id); if (e instanceof HTMLInputElement || e instanceof HTMLSelectElement) e.value = value; } }, 0); }}>Editar</Button></td></tr>) : emptyRow(6)}</tbody>;
+      if (id === "square-list") return <tbody key={key}>{data.squares.length ? data.squares.map((s) => <tr key={s.id}><td>{s.name}</td><td>{s.state}</td><td>{s.code}</td><td>{s.notes}</td><td>Cadastrada</td><td>—</td></tr>) : emptyRow(6)}</tbody>;
+      if (id === "rule-list" || id === "rule-history-list") return <tbody key={key}>{data.versions.length ? data.versions.map((v) => id === "rule-list" ? <tr key={v.id}><td>{data.carriers.find((c) => c.id === v.carrier_id)?.legal_name}</td><td>{data.squares.find((s) => s.id === v.square_id)?.name ?? "Todas"}</td><td>{v.valid_from} / {v.valid_until ?? "Sem término"}</td><td>{data.branches.find((b) => b.id === v.branch_id)?.name}</td><td>{v.destination}</td><td>—</td><td>—</td><td>{v.id.slice(0, 8)}</td><td>{v.status}</td><td>—</td></tr> : <tr key={v.id}><td>{v.id.slice(0, 8)}</td><td>{v.valid_from} / {v.valid_until ?? "Sem término"}</td><td>{new Date(v.created_at).toLocaleString("pt-BR")}</td><td>Transportes</td><td>{v.notes || v.status}</td></tr>) : emptyRow(id === "rule-list" ? 10 : 5)}</tbody>;
+      const bills = data.invoices.filter((v) => v.number.toLowerCase().includes(invoiceFilter.toLowerCase()) && (!filters["inv-from"] || v.issued_on >= filters["inv-from"]) && (!filters["inv-to"] || v.issued_on <= filters["inv-to"]) && (!filters["inv-carrier"] || v.carrier_id === filters["inv-carrier"]) && (!filters["inv-branch"] || data.items.some((i) => i.invoice_id === v.id && i.branch_id === filters["inv-branch"])));
+      return <tbody key={key}>{bills.length ? bills.map((v) => <tr key={v.id}>{(id === "upload-history" ? [v.number, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", "), v.issued_on] : [v.number, v.issued_on, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", ")]).map((text, index) => <td key={index}>{text}</td>)}<td>Pendente</td><td>{money(v.declared_total)}</td><td>{v.status}</td><td>—</td></tr>) : emptyRow(8)}</tbody>;
+    }
+    if (tag === "select" && (id.endsWith("-carrier") || id.endsWith("-branch") || id === "rule-square")) {
+      const entries = id.endsWith("-carrier") ? data.carriers.map((c) => ({ id: c.id, name: c.legal_name })) : id.endsWith("-branch") ? data.branches : data.squares;
+      return <select key={key} id={id} required={Boolean(attrs["required"] !== undefined)} onChange={(e) => setFilters((old) => ({ ...old, [id]: e.target.value }))}><option value="">{id.startsWith("rule-") ? "Selecionar" : "Todos"}</option>{entries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>;
+    }
     if (tag === "body")
       return (
         <div
@@ -246,6 +299,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
             <h1>AUDITORIA INTELIGENTE DE FRETES</h1>
             <span className="top-sub">Rede ANCORA - Logística Nacional</span>
           </div>
+          <AuditSignIn />
           {children
             .filter(
               (c) => typeof c === "string" || String(c.attrs["class"] || "") !== "crumb",
@@ -464,6 +518,8 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       props["checked"] = max;
       props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setMax(e.target.checked);
     }
+    if (id === "inv-number") { props["value"] = invoiceFilter; props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setInvoiceFilter(e.target.value); }
+    if (id === "inv-from" || id === "inv-to") { delete props["defaultValue"]; props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setFilters((old) => ({ ...old, [id]: e.target.value })); }
     if (tag === "label") {
       if (!props["htmlFor"]) {
         const child = children.find(
@@ -487,7 +543,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       return (
         <div key={key} className="validation">
           {file
-            ? "Arquivo selecionado. Conciliação indisponível até conectar a base."
+            ? "Arquivo selecionado para importação. Associação documental e cálculo permanecem pendentes."
             : "Aguardando leitura do arquivo."}
         </div>
       );
@@ -517,6 +573,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       }
       let action = unavailable;
       if (id === "add-carrier") action = () => setModal("modal-carrier");
+      if (["save-rule", "save-carrier", "square-save", "process-invoice"].includes(id)) action = () => { void persist(id); };
       if (id === "add-rule")
         action = () => {
           setTab("commercial");
@@ -554,8 +611,8 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           variant="approved"
           size="approved"
           type="button"
-          disabled={saving || Boolean(props["disabled"])}
-          title={saving ? "Base não conectada" : undefined}
+          disabled={saving ? busy || !canWrite || (id === "process-invoice" && !file) : Boolean(props["disabled"])}
+          title={saving && !canWrite ? "Entre com um perfil autorizado para salvar" : undefined}
           className={`${cls} ${attrs["data-editor-tab"] === tab ? "active" : ""}`}
           onClick={action}
         >
@@ -563,7 +620,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
             <X />
           ) : (
             children.map((c, i) =>
-              render(typeof c === "string" ? c.replace(/^[⇩＋⇧]\s*/, "") : c, `${key}-${i}`),
+              render(typeof c === "string" ? (id === "process-invoice" ? busy ? "Importando…" : "Importar faturas" : c.replace(/^[⇩＋⇧]\s*/, "")) : c, `${key}-${i}`),
             )
           )}
           {id.includes("export") && <Download />}
