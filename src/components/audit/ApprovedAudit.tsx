@@ -33,7 +33,8 @@ import { CteDetails, CteRows } from "./CteDetails";
 import type { CteRecord } from "./cte-detail-data";
 import layout from "./approved-layout.json";
 import { useAuditData } from "./AuditData";
-import { AuditSignIn, useAuditSession } from "./AuditSession";
+import { useAuditSession } from "./AuditSession";
+import { UserMenu } from "./AuditGate";
 import { errorMessage } from "@/lib/audit-schemas";
 
 const LOGO_URL =
@@ -400,7 +401,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
             </span>
           </div>
           <div className="top-actions">
-            <AuditSignIn />
+            <UserMenu />
             <LiveClock />
           </div>
         </header>
