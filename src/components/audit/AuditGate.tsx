@@ -1,8 +1,9 @@
 import { useState, type FormEvent, type ReactNode } from "react";
-import { Loader2, Lock, Mail, ShieldAlert } from "lucide-react";
+import { Loader2, Lock, LogOut, Mail, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { useAuditSession } from "./AuditSession";
+import { useAuditData } from "./AuditData";
 
 const LOGO_URL =
   "https://cdn.redeancora.com.br/Manual_da_Marca/Logotipo_Oficial/Logotipo_Oficial_Rede_ANCORA.png";
@@ -238,6 +239,44 @@ export function AuditGate({ children }: { children: ReactNode }) {
         </div>
       </div>
       <p className="gate-foot">Rede ANCORA · Logística Nacional</p>
+    </div>
+  );
+}
+
+const roleLabels: Record<string, string> = {
+  admin: "Administrador",
+  transportes: "Transportes",
+  consulta: "Consulta",
+};
+
+export function UserMenu() {
+  const { user, signOut } = useAuditSession();
+  const { data } = useAuditData();
+  if (!user) return null;
+  const name =
+    (user.user_metadata?.["full_name"] as string | undefined) ||
+    (user.user_metadata?.["name"] as string | undefined) ||
+    user.email ||
+    "Usuário";
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
+  const role = data.roles.map((r) => roleLabels[r] ?? r).join(" · ") || "Acesso pendente";
+  return (
+    <div className="user-menu">
+      <span className="user-avatar" aria-hidden="true">
+        {initials}
+      </span>
+      <span className="user-info">
+        <b title={name}>{name}</b>
+        <small>{role}</small>
+      </span>
+      <button type="button" className="btn" title="Sair" aria-label="Sair" onClick={() => void signOut()}>
+        <LogOut size={16} />
+      </button>
     </div>
   );
 }
