@@ -12,19 +12,110 @@ import {
   Flag,
   X,
   Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
   Sun,
   Moon,
+  Monitor,
+  TriangleAlert,
+  Wallet,
+  Link2,
+  FileX,
+  FileText,
+  BarChart3,
+  Lightbulb,
+  History,
+  Truck,
+  MapPin,
+  Scale,
+  type LucideIcon,
 } from "lucide-react";
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
 import type { CteRecord } from "./cte-detail-data";
 import layout from "./approved-layout.json";
-import logo from "@/assets/rede-ancora-logo.asset.json";
 import { useAuditData } from "./AuditData";
 import { AuditSignIn, useAuditSession } from "./AuditSession";
 import { errorMessage } from "@/lib/audit-schemas";
+
+const LOGO_URL =
+  "https://cdn.redeancora.com.br/Manual_da_Marca/Logotipo_Oficial/Logotipo_Oficial_Rede_ANCORA.png";
+type ThemeMode = "system" | "light" | "dark";
+const themeOptions: { mode: ThemeMode; label: string; Icon: LucideIcon }[] = [
+  { mode: "system", label: "Seguir o sistema", Icon: Monitor },
+  { mode: "light", label: "Claro", Icon: Sun },
+  { mode: "dark", label: "Escuro", Icon: Moon },
+];
+function textOf(node: LayoutNode): string {
+  return typeof node === "string" ? node : node.children.map(textOf).join(" ");
+}
+function findClass(node: LayoutNode, name: string): LayoutNode | undefined {
+  if (typeof node === "string") return undefined;
+  const classes = String(node.attrs["class"] || "").split(" ");
+  if (classes.includes(name)) return node;
+  for (const child of node.children) {
+    const found = findClass(child, name);
+    if (found) return found;
+  }
+  return undefined;
+}
+function kpiIcon(label: string): LucideIcon {
+  const t = label.toLowerCase();
+  if (t.includes("alerta") || t.includes("diverg")) return TriangleAlert;
+  if (t.includes("valor")) return Wallet;
+  if (t.includes("sem fatura")) return FileX;
+  if (t.includes("associad") || t.includes("conciliad") || t.includes("com fatura")) return Link2;
+  if (t.includes("fatura")) return Files;
+  return FileText;
+}
+function panelIcon(title: string): { Icon: LucideIcon; tone: "" | "red" | "green" } {
+  const t = title.toLowerCase();
+  if (t.includes("volume")) return { Icon: BarChart3, tone: "" };
+  if (t.includes("alerta") || t.includes("ocorrência")) return { Icon: TriangleAlert, tone: "red" };
+  if (t.includes("insight")) return { Icon: Lightbulb, tone: "green" };
+  if (t.includes("resumo")) return { Icon: Scale, tone: "green" };
+  if (t.includes("histórico")) return { Icon: History, tone: "" };
+  if (t.includes("arquivo")) return { Icon: Upload, tone: "" };
+  if (t.includes("transportadora")) return { Icon: Truck, tone: "" };
+  if (t.includes("praça")) return { Icon: MapPin, tone: "" };
+  if (t.includes("tabela") || t.includes("condiç") || t.includes("leiaute"))
+    return { Icon: TableProperties, tone: "" };
+  if (t.includes("ct-e")) return { Icon: FileCheck, tone: "" };
+  if (t.includes("fatura")) return { Icon: Files, tone: "" };
+  return { Icon: FileText, tone: "" };
+}
+function LiveClock() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), 15000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const time = now
+    ? now.toLocaleTimeString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "--:--";
+  return (
+    <div className="live-clock" aria-label={`Hora de Brasília ${time}`}>
+      <b>{time}</b>
+      <span>
+        Hora de Brasília
+        <br />
+        ao vivo
+      </span>
+    </div>
+  );
+}
+function todayLabel() {
+  return new Date().toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
 
 type LayoutNode =
   | string
@@ -151,20 +242,30 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [busy, setBusy] = useState(false);
   const [invoiceFilter, setInvoiceFilter] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [collapsed, setCollapsed] = useState(false);
   const [selectedCte, setSelectedCte] = useState<CteRecord | null>(null);
   const [modal, setModal] = useState<string | null>(null);
   const [tab, setTab] = useState("commercial");
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [max, setMax] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [systemDark, setSystemDark] = useState(false);
+  const [today, setToday] = useState("");
   useEffect(() => {
-    setDark(window.localStorage.getItem("ancora-theme") === "dark");
+    const stored = window.localStorage.getItem("ancora-theme");
+    if (stored === "light" || stored === "dark" || stored === "system") setThemeMode(stored);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemDark(media.matches);
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    media.addEventListener("change", onChange);
+    setToday(todayLabel());
+    return () => media.removeEventListener("change", onChange);
   }, []);
-  useEffect(() => {
-    window.localStorage.setItem("ancora-theme", dark ? "dark" : "light");
-  }, [dark]);
+  const chooseTheme = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    window.localStorage.setItem("ancora-theme", mode);
+  };
+  const dark = themeMode === "dark" || (themeMode === "system" && systemDark);
   const [bands, setBands] = useState([{ weight: "", value: "" }]);
   const unavailable = () =>
     setMessage(
@@ -231,10 +332,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     }
     if (tag === "body")
       return (
-        <div
-          key={key}
-          className={`app ${collapsed ? "sidebar-collapsed" : ""} ${dark ? "theme-dark" : ""}`}
-        >
+        <div key={key} className={`app ${dark ? "theme-dark" : ""}`}>
           {children.map((c, i) => render(c, `${key}-${i}`))}
           <CteDetails record={selectedCte} onClose={() => setSelectedCte(null)} />
           {message && (
@@ -259,18 +357,6 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           <Button
             variant="approved"
             size="approved"
-            className="settings-link theme-toggle"
-            onClick={() => setDark((value) => !value)}
-            title={dark ? "Alternar para modo claro" : "Alternar para modo noturno"}
-            aria-label={dark ? "Alternar para modo claro" : "Alternar para modo noturno"}
-            aria-pressed={dark}
-          >
-            {dark ? <Sun /> : <Moon />}
-            <span className="nav-text">{dark ? "Modo claro" : "Modo noturno"}</span>
-          </Button>
-          <Button
-            variant="approved"
-            size="approved"
             className={`settings-link ${view === "settings" ? "active" : ""}`}
             asChild
           >
@@ -279,41 +365,73 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
               <span className="nav-text">Configurações</span>
             </Link>
           </Button>
-          <span className="side-caption">REDE ANCORA · LOGÍSTICA NACIONAL</span>
+          <span className="side-label">Tema</span>
+          <div className="theme-switch" role="group" aria-label="Tema">
+            {themeOptions.map(({ mode, label, Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-pressed={themeMode === mode}
+                onClick={() => chooseTheme(mode)}
+              >
+                <Icon />
+              </button>
+            ))}
+          </div>
         </div>
       );
     if (cls === "topbar")
       return (
         <header key={key} className="topbar">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="sidebar-toggle"
-            title={collapsed ? "Expandir menu" : "Recolher menu"}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-          </Button>
+          <img className="top-logo" src={LOGO_URL} alt="Rede ANCORA" />
           <div className="top-title">
-            <h1>AUDITORIA INTELIGENTE DE FRETES</h1>
-            <span className="top-sub">Rede ANCORA - Logística Nacional</span>
+            <span className="top-eyebrow">Logística · Rede ANCORA</span>
+            <h1>
+              Auditoria de Fretes · <span>{names[view]}</span>
+            </h1>
+            <span className="top-sub">
+              <i className="dot" aria-hidden="true" />
+              {loading
+                ? "Carregando cadastros…"
+                : "Cadastros no Lovable Cloud · base de CT-es aguardando conexão"}
+              {today && ` · ${today}`}
+            </span>
           </div>
-          <AuditSignIn />
-          {children
-            .filter(
-              (c) => typeof c === "string" || String(c.attrs["class"] || "") !== "crumb",
-            )
-            .map((c, i) => render(c, `${key}-${i}`))}
+          <div className="top-actions">
+            <AuditSignIn />
+            <LiveClock />
+          </div>
         </header>
       );
     if (id === "crumb-current") return <b key={key}>{names[view]}</b>;
-    if (cls === "brand")
+    if (cls === "brand" || cls === "nav-label") return null;
+    if (cls === "kpi-label") {
+      const Icon = kpiIcon(textOf(node));
       return (
-        <div key={key} className="brand">
-          <img className="brand-logo" src={logo.url} alt="Rede ANCORA" />
+        <div key={key} className="kpi-label">
+          <Icon aria-hidden="true" />
+          {children.map((c, i) => render(c, `${key}-${i}`))}
         </div>
       );
+    }
+    if (cls === "panel-head") {
+      const titleNode = findClass(node, "panel-title");
+      const { Icon, tone } = panelIcon(titleNode ? textOf(titleNode) : "");
+      const [first, ...rest] = children;
+      return (
+        <div key={key} className="panel-head">
+          <div className="panel-head-main">
+            <span className={`panel-icon ${tone}`} aria-hidden="true">
+              <Icon />
+            </span>
+            {first !== undefined && render(first, `${key}-0`)}
+          </div>
+          {rest.map((c, i) => render(c, `${key}-${i + 1}`))}
+        </div>
+      );
+    }
     if (tag === "button" && attrs["data-view"] === "upload") return null;
     if (cls === "nav-ico" || id === "toast") return null;
     if (id === "commercial-components")
