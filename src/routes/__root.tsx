@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Button } from "@/components/ui/button";
 import { AuditSessionProvider } from "@/components/audit/AuditSession";
 import { AuditDataProvider } from "@/components/audit/AuditData";
+import { AuditGate } from "@/components/audit/AuditGate";
 
 function NotFoundComponent() {
   return (
@@ -134,7 +135,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <AuditSessionProvider><AuditDataProvider><Outlet /></AuditDataProvider></AuditSessionProvider>
+      <AuditSessionProvider>
+        <AuditDataProvider>
+          <AuditGate>
+            <Outlet />
+          </AuditGate>
+        </AuditDataProvider>
+      </AuditSessionProvider>
     </QueryClientProvider>
   );
 }
