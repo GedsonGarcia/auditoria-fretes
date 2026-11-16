@@ -2381,3 +2381,195 @@ td {
     transform: none;
   }
 }
+
+/* Título do painel no cabeçalho */
+.top-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-right: auto;
+  padding-left: 14px;
+  min-width: 0;
+}
+.top-title h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--blue);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.top-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Botão de alternância de tema no rodapé do menu */
+.theme-toggle {
+  margin-bottom: 4px;
+}
+.theme-toggle svg {
+  flex-shrink: 0;
+}
+
+/* Transição suave entre os temas */
+.app .main,
+.app .topbar,
+.app .panel,
+.app .kpi,
+.app .filters,
+.app .tbl,
+.app .modal-card,
+.app .cte-dialog {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
+}
+
+/* Tema noturno */
+.theme-dark {
+  --bg: oklch(0.205 0.028 245);
+  --line: oklch(0.335 0.028 240);
+  --white: oklch(0.255 0.032 242);
+  --gray: oklch(0.93 0.012 230);
+  --muted: oklch(0.72 0.02 232);
+  --blue: oklch(0.74 0.09 230);
+  --blue2: oklch(0.8 0.075 228);
+  --softblue: oklch(0.32 0.045 240);
+  --softgreen: oklch(0.32 0.05 150);
+  --softred: oklch(0.33 0.06 22);
+  --softamber: oklch(0.34 0.05 80);
+  --shadow: 0 7px 22px oklch(0.1 0.02 240 / 0.5);
+  --panel-shadow: 0 2px 8px oklch(0.1 0.02 240 / 0.5);
+  --approved-9: oklch(0.255 0.032 242);
+  --approved-10: oklch(0.255 0.032 242);
+  --approved-15: oklch(0.1 0.02 240 / 0.5);
+  --approved-22: oklch(0.7 0.02 232);
+  --approved-24: oklch(0.28 0.03 242);
+  --approved-27: oklch(0.34 0.05 80);
+  --approved-28: oklch(0.78 0.09 78);
+  --approved-29: oklch(0.8 0.09 78);
+  --approved-30: oklch(0.78 0.02 230);
+  --approved-31: oklch(0.3 0.028 240);
+  --approved-32: oklch(0.82 0.02 230);
+  --approved-35: oklch(0.8 0.11 75);
+  --approved-36: oklch(0.78 0.02 230);
+  --approved-37: oklch(0.8 0.018 230);
+  --approved-38: oklch(0.27 0.03 242);
+  --approved-39: oklch(0.8 0.03 228);
+  --approved-40: oklch(0.8 0.02 230);
+  --approved-41: oklch(0.27 0.03 242);
+  --approved-42: oklch(0.29 0.03 240);
+  --approved-43: oklch(0.76 0.02 230);
+  --approved-44: oklch(0.27 0.03 242);
+  --approved-45: oklch(0.78 0.02 230);
+  --approved-46: oklch(0.28 0.03 242);
+  --approved-47: oklch(0.28 0.03 242);
+  --approved-48: oklch(0.78 0.13 145);
+  --approved-49: oklch(0.75 0.16 25);
+  --approved-50: oklch(0.8 0.1 78);
+  --approved-51: oklch(0.28 0.03 242);
+  --approved-52: oklch(0.78 0.02 230);
+  --approved-54: oklch(0.28 0.03 242);
+  --approved-55: oklch(0.78 0.02 230);
+  --approved-56: oklch(0.78 0.13 145);
+  --approved-57: oklch(0.75 0.16 25);
+  --approved-58: oklch(0.28 0.03 242);
+  --approved-59: oklch(0.28 0.03 242);
+  --approved-63: oklch(0.78 0.02 230);
+  --approved-64: oklch(0.36 0.04 235);
+  --approved-65: oklch(0.78 0.02 230);
+  --approved-66: oklch(0.31 0.028 240);
+  --approved-67: oklch(0.78 0.02 230);
+  --approved-68: oklch(0.8 0.02 230);
+  --approved-69: oklch(0.8 0.02 230);
+  --approved-70: oklch(0.28 0.03 242);
+  --approved-71: oklch(0.78 0.02 230);
+  --approved-72: oklch(0.78 0.02 230);
+  --approved-73: oklch(0.35 0.055 82);
+  --approved-74: oklch(0.8 0.11 75);
+  --approved-75: oklch(0.32 0.05 150);
+  --approved-76: oklch(0.78 0.02 230);
+  --approved-77: oklch(0.28 0.03 242);
+  --approved-78: oklch(0.3 0.028 240);
+  --approved-79: oklch(0.8 0.02 230);
+  --approved-80: oklch(0.85 0.02 228);
+  --approved-81: oklch(0.28 0.03 242);
+  --approved-82: oklch(0.8 0.02 230);
+  --approved-83: oklch(0.76 0.02 230);
+  --approved-84: oklch(0.28 0.03 242);
+  --approved-85: oklch(0.31 0.028 240);
+  --approved-86: oklch(0.34 0.05 80);
+  --approved-87: oklch(0.78 0.09 78);
+  --approved-88: oklch(0.34 0.05 80);
+  --sidebar-gradient: linear-gradient(
+    165deg,
+    oklch(0.38 0.075 232),
+    oklch(0.28 0.06 238) 40%,
+    oklch(0.21 0.045 242)
+  );
+}
+.theme-dark .sidebar {
+  color: oklch(0.96 0.01 230);
+}
+.theme-dark .nav button {
+  color: oklch(0.9 0.015 225);
+}
+.theme-dark .nav button.active {
+  background: oklch(0.96 0.01 230);
+  color: oklch(0.3 0.06 238);
+}
+.theme-dark .settings-link {
+  color: oklch(0.96 0.01 230);
+}
+.theme-dark .settings-link.active {
+  background: oklch(0.96 0.01 230);
+  color: oklch(0.3 0.06 238);
+}
+.theme-dark .settings-link:hover:not(.active) {
+  color: oklch(0.96 0.01 230);
+}
+.theme-dark .side-caption,
+.theme-dark .nav-label {
+  color: oklch(0.7 0.025 228);
+}
+.theme-dark .sidebar-toggle {
+  color: var(--blue);
+}
+@media (max-width: 900px) {
+  .top-title h1 {
+    font-size: 13px;
+  }
+  .top-sub {
+    font-size: 9px;
+  }
+}
+
+/* Correções do tema noturno */
+.theme-dark {
+  background: var(--bg);
+}
+body:has(.theme-dark) {
+  background: oklch(0.205 0.028 245);
+}
+.theme-dark .nav .btn {
+  color: oklch(0.9 0.015 225);
+}
+.theme-dark .nav .btn.active {
+  background: oklch(0.96 0.01 230);
+  color: oklch(0.3 0.06 238);
+}
+.theme-dark .nav .btn:hover:not(.active) {
+  background: oklch(1 0 0 / 0.1);
+}
+.theme-dark .btn-primary,
+.theme-dark .btn-green {
+  color: oklch(0.2 0.04 240);
+}

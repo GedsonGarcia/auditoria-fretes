@@ -1,4 +1,4 @@
-import { createElement, useState, type ReactNode } from "react";
+import { createElement, useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,8 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
@@ -148,6 +150,13 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [max, setMax] = useState(false);
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    setDark(window.localStorage.getItem("ancora-theme") === "dark");
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("ancora-theme", dark ? "dark" : "light");
+  }, [dark]);
   const [bands, setBands] = useState([{ weight: "", value: "" }]);
   const unavailable = () =>
     setMessage(
@@ -169,7 +178,10 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     const cls = String(attrs["class"] || "");
     if (tag === "body")
       return (
-        <div key={key} className={`app ${collapsed ? "sidebar-collapsed" : ""}`}>
+        <div
+          key={key}
+          className={`app ${collapsed ? "sidebar-collapsed" : ""} ${dark ? "theme-dark" : ""}`}
+        >
           {children.map((c, i) => render(c, `${key}-${i}`))}
           <CteDetails record={selectedCte} onClose={() => setSelectedCte(null)} />
           {message && (
@@ -191,6 +203,18 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     if (cls === "side-foot")
       return (
         <div key={key} className="side-foot">
+          <Button
+            variant="approved"
+            size="approved"
+            className="settings-link theme-toggle"
+            onClick={() => setDark((value) => !value)}
+            title={dark ? "Alternar para modo claro" : "Alternar para modo noturno"}
+            aria-label={dark ? "Alternar para modo claro" : "Alternar para modo noturno"}
+            aria-pressed={dark}
+          >
+            {dark ? <Sun /> : <Moon />}
+            <span className="nav-text">{dark ? "Modo claro" : "Modo noturno"}</span>
+          </Button>
           <Button
             variant="approved"
             size="approved"
@@ -218,7 +242,15 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           >
             {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
-          {children.map((c, i) => render(c, `${key}-${i}`))}
+          <div className="top-title">
+            <h1>AUDITORIA INTELIGENTE DE FRETES</h1>
+            <span className="top-sub">Rede ANCORA - Logística Nacional</span>
+          </div>
+          {children
+            .filter(
+              (c) => typeof c === "string" || String(c.attrs["class"] || "") !== "crumb",
+            )
+            .map((c, i) => render(c, `${key}-${i}`))}
         </header>
       );
     if (id === "crumb-current") return <b key={key}>{names[view]}</b>;
