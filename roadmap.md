@@ -1,6 +1,8 @@
 # Auditoria Inteligente de Fretes
 
 ## Solicitação atual
+- [ ] Criar a estrutura de cadastros, versões comerciais e importações no Lovable Cloud, com acesso restrito e sem replicar a base original de CT-es.
+- [ ] Vincular cadastros e importação aos dados reais, com login e validação de permissões.
 - [x] Adicionar Configurações ao rodapé do menu, com formulários de usuários e filiais, acesso ao cadastro existente de transportadoras e parâmetros previstos no escopo.
 - [x] Preparar detalhamento flutuante do CT-e com decomposição lado a lado e acesso ao DACTE real; testes com registros isolados, sem dados fictícios no painel.
 - [x] Atualizar apresentação conforme a referência enviada e validar navegação, formulários, recolhimento do menu e tamanhos de tela; sete testes aprovados e nenhuma falha observada no navegador.
