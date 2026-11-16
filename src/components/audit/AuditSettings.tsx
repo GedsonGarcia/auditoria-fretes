@@ -54,7 +54,8 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Record<string, string> | null>(null);
   const [page, setPage] = useState(1);
-  const [section, setSection] = useState<Section>("users");
+  const [section, setSection] = useState<Section>(admin ? "users" : "branches");
+  const visibleSections = sections.filter((item) => item.id !== "users" || admin);
   const [registration, setRegistration] = useState<Registration | null>(null);
   const [search, setSearch] = useState("");
   const form =
@@ -69,7 +70,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
     try {
       if (registration === "branches") await save({ kind: "branch", value: { id: editing?.["id"], code: get("Código da filial"), name: get("Nome da filial"), cnpj: get("CNPJ"), city: get("Município"), state: get("UF"), address: get("Endereço"), active: get("active") === "true" } });
       else await save({ kind: "access", value: { email: get("E-mail"), name: get("Nome completo"), team: get("Equipe"), role: get("role"), active: get("active") === "true" } });
-      setRegistration(null); setEditing(null); setMessage(registration === "users" ? "Acesso autorizado. O usuário pode entrar com o e-mail cadastrado." : "Filial salva.");
+      setRegistration(null); setEditing(null); setMessage(registration === "users" ? (get("active") === "true" ? "Acesso liberado. No primeiro acesso, o usuário clica em \"Primeiro acesso\" na tela de login e cria a senha com este e-mail." : "Acesso bloqueado. O usuário não consegue mais abrir o sistema.") : "Filial salva.");
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setBusy(false); }
   }
@@ -86,7 +87,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
         </span>
       </div>
       <nav className="settings-tabs" aria-label="Áreas de configurações">
-        {sections.map(({ id, label, icon: Icon }) => (
+        {visibleSections.map(({ id, label, icon: Icon }) => (
           <Button
             key={id}
             variant="approved"
@@ -113,7 +114,19 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
           </p>
         </div>
       </div>
-      {(message || error) && <p role="status">{message || error}</p>}
+      {(message || error) && <p role="status" className="settings-message">{message || error}</p>}
+      {section === "users" && admin && (
+        <div className="admin-note">
+          <ShieldCheck aria-hidden="true" />
+          <p>
+            <b>Administrador principal:</b> gedson.garcia@redeancora.com.br (fixo, não pode ser
+            alterado nem bloqueado). Para liberar outra pessoa, cadastre o e-mail dela abaixo e
+            escolha o perfil: <b>Administrador</b> gerencia usuários e tudo o mais,{" "}
+            <b>Transportes</b> edita cadastros, tabelas e importações, e <b>Consulta</b> só
+            visualiza. Para tirar o acesso, edite e mude a situação para Inativo.
+          </p>
+        </div>
+      )}
       {form ? (
         <>
           <div className="settings-toolbar">
@@ -254,7 +267,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
         <DialogContent className="registration-dialog">
           <DialogTitle>{registration ? forms[registration].title : "Cadastro"}</DialogTitle>
           <DialogDescription>
-            {registration === "users" ? "Autorize o acesso pelo e-mail corporativo. A senha não é definida neste cadastro." : "Cadastro operacional da filial."}
+            {registration === "users" ? "Libere o acesso pelo e-mail da pessoa. Ela cria a própria senha em \"Primeiro acesso\", na tela de login." : "Cadastro operacional da filial."}
           </DialogDescription>
           <form key={editing?.["id"] || editing?.["E-mail"] || registration} onSubmit={submit}>
             <div className="form-grid">
@@ -267,6 +280,7 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
                       name={field}
                       defaultValue={editing?.[field] ?? ""}
                       type={field === "E-mail" ? "email" : "text"}
+                      readOnly={field === "E-mail" && Boolean(editing?.["E-mail"])}
                       required
                       maxLength={field === "UF" ? 2 : undefined}
                     />
