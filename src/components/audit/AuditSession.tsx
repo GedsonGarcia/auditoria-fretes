@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { LovableMark } from "@lovable.dev/cloud-auth-js/react";
+const LovableMark = () => <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></svg>;
 import { Button } from "@/components/ui/button";
 
 const SessionContext = createContext<{ user: User | null; pending: boolean }>({ user: null, pending: true });
