@@ -12,6 +12,8 @@ import {
   Flag,
   X,
   Settings,
+  Search,
+  Pencil,
   Sun,
   Moon,
   Monitor,
@@ -47,6 +49,15 @@ import {
   type FeeRule,
   type FreightConfig,
 } from "@/lib/freight-rules";
+import {
+  carrierMatches,
+  currentVersions,
+  nextFocusable,
+  versionChain,
+  versionNumber,
+  versionToForm,
+} from "@/lib/table-versions";
+import { GENERAL_LOCALITY } from "@/lib/square-localities";
 import { errorMessage } from "@/lib/audit-schemas";
 
 const LOGO_URL =
@@ -221,6 +232,57 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [commercialValues, setCommercialValues] = useState<CommercialValues>({});
   const [rules, setRules] = useState<FeeRule[]>(() => DEFAULT_RULES.map((r) => ({ ...r })));
   const [freightConfig, setFreightConfig] = useState<FreightConfig>(DEFAULT_CONFIG);
+  const [tableSearch, setTableSearch] = useState("");
+  const [editingVersion, setEditingVersion] = useState<string | null>(null);
+  const fillRuleForm = (values: Record<string, string>) =>
+    window.setTimeout(() => {
+      for (const [fieldId, value] of Object.entries(values)) {
+        const element = document.getElementById(fieldId);
+        if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement)
+          element.value = value;
+      }
+    }, 0);
+  const openRuleEditor = (versionId: string | null) => {
+    const version = versionId ? data.versions.find((v) => v.id === versionId) : undefined;
+    const form = version ? versionToForm(version) : null;
+    setCommercialValues(form?.values ?? {});
+    setRules(form?.rules ?? DEFAULT_RULES.map((r) => ({ ...r })));
+    setFreightConfig(form?.config ?? DEFAULT_CONFIG);
+    setBands(form?.bands ?? [{ weight: "", value: "" }]);
+    setEditingVersion(version?.id ?? null);
+    setFilters((old) => ({ ...old, "rule-carrier": version?.carrier_id ?? "" }));
+    setTab("commercial");
+    setModal("modal-rule");
+    const config =
+      version && typeof version.configuration === "object" && !Array.isArray(version.configuration)
+        ? (version.configuration as Record<string, unknown>)
+        : {};
+    fillRuleForm({
+      "rule-edit-id": version?.id ?? "",
+      "rule-carrier": version?.carrier_id ?? "",
+      "rule-branch": version?.branch_id ?? "",
+      "rule-destination": version?.destination ?? "",
+      "rule-square": version?.square_id ?? "",
+      "rule-mode": typeof config["mode"] === "string" ? config["mode"] : "fracionado",
+      "rule-min-goods": typeof config["min_goods"] === "number" ? String(config["min_goods"]) : "",
+      "rule-notes": version?.notes ?? "",
+      "rule-start": version?.valid_from ?? "",
+      "rule-end": version?.valid_until ?? "",
+    });
+  };
+  const onEnterNext = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey) return;
+    const target = event.target as HTMLElement;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+    if (target instanceof HTMLInputElement && ["checkbox", "radio", "file"].includes(target.type))
+      return;
+    event.preventDefault();
+    const next = nextFocusable(target);
+    if (next) {
+      next.focus();
+      if (next instanceof HTMLInputElement && next.type !== "checkbox") next.select();
+    }
+  };
   const setCommercial = (name: string, patch: Partial<{ value: string; na: boolean }>) =>
     setCommercialValues((old) => ({
       ...old,
@@ -276,13 +338,17 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
         setFile(null);
         return;
       }
-      setMessage(id === "save-rule" ? "Tabela salva. Cálculos pendentes de parametrização e validação." : "Cadastro salvo.");
+      setMessage(id === "save-rule" ? (editingVersion ? "Nova versão da tabela salva. A versão anterior foi preservada no histórico." : "Tabela salva.") : "Cadastro salvo.");
       setModal(null);
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setBusy(false); }
   }
   const money = (value: number | null) => value === null ? "Não informado" : value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const emptyRow = (columns: number) => <tr><td colSpan={columns} className="empty">{loading ? "Carregando registros…" : error || (user ? data.roles.length ? "Nenhum registro cadastrado." : "Acesso pendente de autorização do administrador." : "Entre para consultar os registros.")}</td></tr>;
+  const emptyRow = (columns: number, text?: string) => <tr><td colSpan={columns} className="empty">{loading ? "Carregando registros…" : error || text || (user ? data.roles.length ? "Nenhum registro cadastrado." : "Acesso pendente de autorização do administrador." : "Entre para consultar os registros.")}</td></tr>;
+  const dateBr = (value: string) => {
+    const [y, m, d] = value.split("-");
+    return y && m && d ? `${d}/${m}/${y}` : value;
+  };
   const close = () => {
     if (
       modal &&
@@ -299,9 +365,75 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     const cls = String(attrs["class"] || "");
     if (cls === "topright") return null;
     if (["carrier-list", "square-list", "rule-list", "invoice-list", "upload-history", "rule-history-list"].includes(id)) {
-      if (id === "carrier-list") return <tbody key={key}>{data.carriers.length ? data.carriers.map((c) => <tr key={c.id}><td>{c.legal_name}</td><td>{c.cnpj}</td><td>{c.display_name}</td><td>{new Date(c.created_at).toLocaleDateString("pt-BR")}</td><td>{c.active ? "Ativo" : "Inativo"}</td><td><Button variant="outline" disabled={!canWrite} onClick={() => { setModal("modal-carrier"); setTimeout(() => { for (const [id, value] of Object.entries({ "carrier-edit-id": c.id, "carrier-legal": c.legal_name, "carrier-cnpj": c.cnpj, "carrier-short": c.display_name, "carrier-active": c.active ? "Ativo" : "Inativo" })) { const e = document.getElementById(id); if (e instanceof HTMLInputElement || e instanceof HTMLSelectElement) e.value = value; } }, 0); }}>Editar</Button></td></tr>) : emptyRow(6)}</tbody>;
+      if (id === "carrier-list") return <tbody key={key}>{data.carriers.filter((c) => carrierMatches(c, tableSearch)).length ? data.carriers.filter((c) => carrierMatches(c, tableSearch)).map((c) => <tr key={c.id}><td>{c.legal_name}</td><td>{c.cnpj}</td><td>{c.display_name}</td><td>{new Date(c.created_at).toLocaleDateString("pt-BR")}</td><td>{c.active ? "Ativo" : "Inativo"}</td><td><Button variant="outline" disabled={!canWrite} onClick={() => { setModal("modal-carrier"); setTimeout(() => { for (const [id, value] of Object.entries({ "carrier-edit-id": c.id, "carrier-legal": c.legal_name, "carrier-cnpj": c.cnpj, "carrier-short": c.display_name, "carrier-active": c.active ? "Ativo" : "Inativo" })) { const e = document.getElementById(id); if (e instanceof HTMLInputElement || e instanceof HTMLSelectElement) e.value = value; } }, 0); }}>Editar</Button></td></tr>) : emptyRow(6, tableSearch ? "Nenhuma transportadora encontrada para a pesquisa." : undefined)}</tbody>;
       if (id === "square-list") return <tbody key={key}>{data.squares.length ? data.squares.map((s) => <tr key={s.id}><td>{s.name}</td><td>{s.state}</td><td>{s.code}</td><td>{s.notes}</td><td>Cadastrada</td><td>—</td></tr>) : emptyRow(6)}</tbody>;
-      if (id === "rule-list" || id === "rule-history-list") return <tbody key={key}>{data.versions.length ? data.versions.map((v) => id === "rule-list" ? <tr key={v.id}><td>{data.carriers.find((c) => c.id === v.carrier_id)?.legal_name}</td><td>{data.squares.find((s) => s.id === v.square_id)?.name ?? "Todas"}</td><td>{v.valid_from} / {v.valid_until ?? "Sem término"}</td><td>{data.branches.find((b) => b.id === v.branch_id)?.name}</td><td>{v.destination}</td><td>—</td><td>—</td><td>{v.id.slice(0, 8)}</td><td>{v.status}</td><td>—</td></tr> : <tr key={v.id}><td>{v.id.slice(0, 8)}</td><td>{v.valid_from} / {v.valid_until ?? "Sem término"}</td><td>{new Date(v.created_at).toLocaleString("pt-BR")}</td><td>Transportes</td><td>{v.notes || v.status}</td></tr>) : emptyRow(id === "rule-list" ? 10 : 5)}</tbody>;
+      if (id === "rule-list") {
+        const list = currentVersions(data.versions).filter((v) =>
+          carrierMatches(data.carriers.find((c) => c.id === v.carrier_id), tableSearch),
+        );
+        return (
+          <tbody key={key}>
+            {list.length
+              ? list.map((v) => {
+                  const carrier = data.carriers.find((c) => c.id === v.carrier_id);
+                  const square = data.squares.find((sq) => sq.id === v.square_id);
+                  const config = (v.configuration ?? {}) as Record<string, unknown>;
+                  const commercialData = (v.commercial ?? {}) as Record<string, { value?: number | null }>;
+                  const minFreight = commercialData["FRETE MÍNIMO"]?.value;
+                  return (
+                    <tr key={v.id}>
+                      <td>
+                        <b>{carrier?.display_name || carrier?.legal_name}</b>
+                        <small className="cell-sub">{carrier?.cnpj}</small>
+                      </td>
+                      <td>{square ? `${square.name} · ${square.state}` : "Todas"}</td>
+                      <td>
+                        {dateBr(v.valid_from)} a {v.valid_until ? dateBr(v.valid_until) : "sem término"}
+                      </td>
+                      <td>{data.branches.find((b) => b.id === v.branch_id)?.name}</td>
+                      <td>{v.destination || "—"}</td>
+                      <td>{typeof config["min_goods"] === "number" ? money(config["min_goods"]) : "—"}</td>
+                      <td>{typeof minFreight === "number" ? money(minFreight) : "—"}</td>
+                      <td>v{versionNumber(data.versions, v.id)}</td>
+                      <td>{v.status}</td>
+                      <td>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={!canWrite}
+                          onClick={() => openRuleEditor(v.id)}
+                        >
+                          <Pencil />
+                          Editar
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              : emptyRow(10, tableSearch ? "Nenhuma tabela encontrada para a pesquisa." : undefined)}
+          </tbody>
+        );
+      }
+      if (id === "rule-history-list") {
+        const chain = editingVersion ? versionChain(data.versions, editingVersion) : [];
+        return (
+          <tbody key={key}>
+            {chain.length
+              ? chain.map((v, i) => (
+                  <tr key={v.id}>
+                    <td>v{chain.length - i}</td>
+                    <td>
+                      {dateBr(v.valid_from)} a {v.valid_until ? dateBr(v.valid_until) : "sem término"}
+                    </td>
+                    <td>{new Date(v.created_at).toLocaleString("pt-BR")}</td>
+                    <td>Transportes</td>
+                    <td>{v.notes || v.status}</td>
+                  </tr>
+                ))
+              : emptyRow(5, "Tabela nova: ainda não há versões anteriores.")}
+          </tbody>
+        );
+      }
       const bills = data.invoices.filter((v) => v.number.toLowerCase().includes(invoiceFilter.toLowerCase()) && (!filters["inv-from"] || v.issued_on >= filters["inv-from"]) && (!filters["inv-to"] || v.issued_on <= filters["inv-to"]) && (!filters["inv-carrier"] || v.carrier_id === filters["inv-carrier"]) && (!filters["inv-branch"] || data.items.some((i) => i.invoice_id === v.id && i.branch_id === filters["inv-branch"])));
       return <tbody key={key}>{bills.length ? bills.map((v) => <tr key={v.id}>{(id === "upload-history" ? [v.number, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", "), v.issued_on] : [v.number, v.issued_on, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", ")]).map((text, index) => <td key={index}>{text}</td>)}<td>Pendente</td><td>{money(v.declared_total)}</td><td>{v.status}</td><td>—</td></tr>) : emptyRow(8)}</tbody>;
     }
@@ -312,12 +444,19 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           ? data.branches
           : data.squares
               .filter((sq) => !filters["rule-carrier"] || !sq.carrier_id || sq.carrier_id === filters["rule-carrier"])
-              .map((sq) => ({ id: sq.id, name: `${sq.name} · ${sq.state}` }));
+              .map((sq) => ({
+                id: sq.id,
+                name: `${sq.name} · ${sq.state}${
+                  data.localities.some((l) => l.square_id === sq.id && l.name === GENERAL_LOCALITY)
+                    ? " (Geral)"
+                    : ""
+                }`,
+              }));
       return <select key={key} id={id} required={Boolean(attrs["required"] !== undefined)} onChange={(e) => setFilters((old) => ({ ...old, [id]: e.target.value }))}><option value="">{id.startsWith("rule-") ? "Selecionar" : "Todos"}</option>{entries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>;
     }
     if (tag === "body")
       return (
-        <div key={key} className={`app ${dark ? "theme-dark" : ""}`}>
+        <div key={key} className={`app ${dark ? "theme-dark" : ""}`} onKeyDown={onEnterNext}>
           {children.map((c, i) => render(c, `${key}-${i}`))}
           <CteDetails record={selectedCte} onClose={() => setSelectedCte(null)} />
           {message && (
@@ -503,6 +642,54 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           ))}
         </tbody>
       );
+    if (cls === "table-extra")
+      return (
+        <div key={key} className="table-search">
+          <label className="search-field">
+            <Search aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Pesquisar transportadora"
+              placeholder="Pesquisar transportadora pelo nome, parte do nome ou CNPJ"
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+            />
+          </label>
+          {tableSearch && (
+            <span className="small-note">
+              {data.carriers.filter((c) => carrierMatches(c, tableSearch)).length} transportadora(s) ·{" "}
+              {
+                currentVersions(data.versions).filter((v) =>
+                  carrierMatches(data.carriers.find((c) => c.id === v.carrier_id), tableSearch),
+                ).length
+              }{" "}
+              tabela(s)
+            </span>
+          )}
+        </div>
+      );
+    if (id === "rule-modal-title")
+      return (
+        <span key={key} id={id}>
+          {editingVersion ? "Editar tabela de frete" : "Cadastrar tabela de frete"}
+        </span>
+      );
+    if (id === "current-version")
+      return (
+        <b key={key} id={id}>
+          {editingVersion
+            ? `Nova versão (v${versionNumber(data.versions, editingVersion) + 1})`
+            : "Primeira versão"}
+        </b>
+      );
+    if (id === "current-changed") {
+      const version = data.versions.find((v) => v.id === editingVersion);
+      return (
+        <b key={key} id={id}>
+          {version ? new Date(version.created_at).toLocaleString("pt-BR") : "—"}
+        </b>
+      );
+    }
     if (id === "editor-squares")
       return (
         <div key={key} id={id} className={`editor-pane ${tab === "squares" ? "active" : ""}`}>
@@ -610,15 +797,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       let action = unavailable;
       if (id === "add-carrier") action = () => setModal("modal-carrier");
       if (["save-rule", "save-carrier", "process-invoice"].includes(id)) action = () => { void persist(id); };
-      if (id === "add-rule")
-        action = () => {
-          setCommercialValues({});
-          setRules(DEFAULT_RULES.map((r) => ({ ...r })));
-          setFreightConfig(DEFAULT_CONFIG);
-          setBands([{ weight: "", value: "" }]);
-          setTab("commercial");
-          setModal("modal-rule");
-        };
+      if (id === "add-rule") action = () => openRuleEditor(null);
       if (cls === "close" || children.includes("Cancelar") || children.includes("Fechar"))
         action = close;
       if (id === "download-template") action = downloadTemplate;
