@@ -35,6 +35,7 @@ import layout from "./approved-layout.json";
 import { useAuditData } from "./AuditData";
 import { useAuditSession } from "./AuditSession";
 import { UserMenu } from "./AuditGate";
+import { SquareEditor } from "./SquareEditor";
 import { errorMessage } from "@/lib/audit-schemas";
 
 const LOGO_URL =
@@ -281,8 +282,6 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     try {
       if (id === "save-carrier") {
         await save({ kind: "carrier", value: { id: field("carrier-edit-id") || undefined, legal_name: field("carrier-legal"), cnpj: field("carrier-cnpj"), display_name: field("carrier-short"), active: field("carrier-active") !== "Inativa" && field("carrier-active") !== "Inativo" } });
-      } else if (id === "square-save") {
-        await save({ kind: "square", value: { name: field("square-name"), state: field("square-uf"), code: field("square-code"), notes: field("square-notes") } });
       } else if (id === "save-rule") {
         const commercialValues = Object.fromEntries(commercial.map((name, i) => {
           const input = document.getElementById(`commercial-${i}`);
@@ -299,7 +298,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
         return;
       }
       setMessage(id === "save-rule" ? "Tabela salva. Cálculos pendentes de parametrização e validação." : "Cadastro salvo.");
-      if (id !== "square-save") setModal(null);
+      setModal(null);
     } catch (error) { setMessage(errorMessage(error)); }
     finally { setBusy(false); }
   }
@@ -328,7 +327,13 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       return <tbody key={key}>{bills.length ? bills.map((v) => <tr key={v.id}>{(id === "upload-history" ? [v.number, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", "), v.issued_on] : [v.number, v.issued_on, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", ")]).map((text, index) => <td key={index}>{text}</td>)}<td>Pendente</td><td>{money(v.declared_total)}</td><td>{v.status}</td><td>—</td></tr>) : emptyRow(8)}</tbody>;
     }
     if (tag === "select" && (id.endsWith("-carrier") || id.endsWith("-branch") || id === "rule-square")) {
-      const entries = id.endsWith("-carrier") ? data.carriers.map((c) => ({ id: c.id, name: c.legal_name })) : id.endsWith("-branch") ? data.branches : data.squares;
+      const entries = id.endsWith("-carrier")
+        ? data.carriers.map((c) => ({ id: c.id, name: c.legal_name }))
+        : id.endsWith("-branch")
+          ? data.branches
+          : data.squares
+              .filter((sq) => !filters["rule-carrier"] || !sq.carrier_id || sq.carrier_id === filters["rule-carrier"])
+              .map((sq) => ({ id: sq.id, name: `${sq.name} · ${sq.state}` }));
       return <select key={key} id={id} required={Boolean(attrs["required"] !== undefined)} onChange={(e) => setFilters((old) => ({ ...old, [id]: e.target.value }))}><option value="">{id.startsWith("rule-") ? "Selecionar" : "Todos"}</option>{entries.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>;
     }
     if (tag === "body")
@@ -606,6 +611,12 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           ))}
         </tbody>
       );
+    if (id === "editor-squares")
+      return (
+        <div key={key} id={id} className={`editor-pane ${tab === "squares" ? "active" : ""}`}>
+          <SquareEditor />
+        </div>
+      );
     if (id === "compositionConfig" && max) return null;
     if (cls === "chart")
       return (
@@ -692,7 +703,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       }
       let action = unavailable;
       if (id === "add-carrier") action = () => setModal("modal-carrier");
-      if (["save-rule", "save-carrier", "square-save", "process-invoice"].includes(id)) action = () => { void persist(id); };
+      if (["save-rule", "save-carrier", "process-invoice"].includes(id)) action = () => { void persist(id); };
       if (id === "add-rule")
         action = () => {
           setTab("commercial");
@@ -715,14 +726,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       if (attrs["data-editor-tab"]) action = () => setTab(String(attrs["data-editor-tab"]));
       if (children.some((c) => typeof c === "string" && c.includes("Adicionar faixa")))
         action = () => setBands((prev) => [...prev, { weight: "", value: "" }]);
-      if (id === "square-cancel")
-        action = () => {
-          ["square-name", "square-code", "square-notes"].forEach((x) => {
-            const e = document.getElementById(x);
-            if (e instanceof HTMLInputElement) e.value = "";
-          });
-        };
-      const saving = ["save-rule", "save-carrier", "square-save", "process-invoice"].includes(id);
+      const saving = ["save-rule", "save-carrier", "process-invoice"].includes(id);
       return (
         <Button
           {...props}
@@ -732,7 +736,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           type="button"
           disabled={saving ? busy || !canWrite || (id === "process-invoice" && !file) : Boolean(props["disabled"])}
           title={saving && !canWrite ? "Entre com um perfil autorizado para salvar" : undefined}
-          className={`${cls} ${attrs["data-editor-tab"] === tab ? "active" : ""}`}
+          className={`${attrs["data-editor-tab"] ? cls.replace(/\bactive\b/, "").trim() : cls} ${attrs["data-editor-tab"] === tab ? "active" : ""}`}
           onClick={action}
         >
           {cls === "close" ? (
