@@ -1,4 +1,6 @@
 export const MAX_LOCALITIES = 5000;
+/** Marcador gravado como única localidade de uma praça "Geral" (todas as localidades da UF). */
+export const GENERAL_LOCALITY = "*";
 const HEADERS = new Set([
   "municipio",
   "municipios",
@@ -26,7 +28,7 @@ export function parseLocalities(text: string): string[] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   lines.forEach((line, index) => {
     const cell = (line.split("\t")[0] ?? "").replace(/^"|"$/g, "").trim().replace(/\s+/g, " ");
-    if (!cell) return;
+    if (!cell || cell === GENERAL_LOCALITY) return;
     const key = normalizeLocality(cell);
     if (index === 0 && HEADERS.has(key)) return;
     if (seen.has(key)) return;
