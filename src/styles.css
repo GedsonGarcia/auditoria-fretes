@@ -3541,3 +3541,143 @@ body:has(.theme-dark) {
 .theme-dark .settings-message {
   color: #fff;
 }
+
+/* Cadastro de praças */
+.square-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.square-form-new {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) 130px minmax(200px, 2fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+.square-import {
+  height: 42px;
+  gap: 8px;
+  white-space: nowrap;
+}
+.square-paste {
+  margin: 0 20px 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px dashed var(--azul);
+  border-radius: 8px;
+}
+.square-paste p {
+  margin: 0;
+  font-size: 13px;
+}
+.square-paste textarea {
+  min-height: 80px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+}
+.square-paste textarea:focus {
+  outline: none;
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgb(61 174 43 / 0.15);
+}
+.square-paste button {
+  align-self: flex-start;
+}
+.square-notice {
+  margin: 0 20px 18px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.square-notice.ok {
+  border: 1px solid var(--verde);
+  background: rgb(61 174 43 / 0.08);
+  color: var(--azul);
+}
+.square-notice.error {
+  border: 1px solid var(--vermelho);
+  background: #fff;
+  color: var(--vermelho);
+}
+.square-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 460px;
+  margin-bottom: 12px;
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.square-search svg {
+  width: 16px;
+  height: 16px;
+  color: var(--cinza-claro);
+}
+.square-search input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+}
+.square-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.square-actions button {
+  gap: 6px;
+  color: var(--azul);
+}
+.square-list-row td {
+  background: var(--bg);
+}
+.square-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.square-chips span {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  color: var(--cinza-escuro);
+}
+.theme-dark .square-search,
+.theme-dark .square-paste textarea,
+.theme-dark .square-chips span {
+  background: #323232;
+  border-color: #3e3f41;
+  color: #fff;
+}
+.theme-dark .square-search input {
+  color: #fff;
+}
+.theme-dark .square-notice.ok,
+.theme-dark .square-notice.error {
+  background: transparent;
+  color: #fff;
+}
+.theme-dark .square-actions button {
+  color: #fff;
+}
+@media (max-width: 900px) {
+  .square-form-new {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .square-form-new {
+    grid-template-columns: 1fr;
+  }
+}
