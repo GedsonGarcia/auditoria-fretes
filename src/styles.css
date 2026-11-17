@@ -3949,3 +3949,103 @@ body:has(.theme-dark) {
 .calc-table td:nth-child(5) {
   overflow-wrap: normal;
 }
+
+/* Pesquisa em Tabelas de Frete, edição de tabela e praça Geral */
+.table-search {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 4px 0 18px;
+}
+.table-search .search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 420px;
+  max-width: 620px;
+  height: 46px;
+  padding: 0 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--card-shadow);
+}
+.table-search .search-field:focus-within {
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgb(61 174 43 / 0.15);
+}
+.table-search .search-field svg {
+  width: 20px;
+  height: 20px;
+  color: var(--azul);
+  flex-shrink: 0;
+}
+.table-search input {
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--gray);
+}
+.cell-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.table-panel td > button,
+.table-panel td > a {
+  gap: 6px;
+  color: var(--azul);
+}
+.square-form-new {
+  grid-template-columns: minmax(180px, 2fr) 120px minmax(180px, 2fr) auto auto;
+}
+.square-general {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.square-general:has(input:checked) {
+  border-color: var(--azul);
+  background: rgb(0 58 93 / 0.06);
+}
+.square-general span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.square-general b {
+  font-size: 13px;
+  color: var(--azul);
+}
+.square-general small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.theme-dark .table-search .search-field,
+.theme-dark .square-general {
+  background: #383838;
+  border-color: #3e3f41;
+}
+.theme-dark .table-search input,
+.theme-dark .square-general b,
+.theme-dark .table-search .search-field svg,
+.theme-dark .table-panel td > button,
+.theme-dark .table-panel td > a {
+  color: #fff;
+}
+@media (max-width: 1100px) {
+  .square-form-new {
+    grid-template-columns: 1fr 1fr;
+  }
+}
