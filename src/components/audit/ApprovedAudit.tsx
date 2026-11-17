@@ -36,6 +36,17 @@ import { useAuditData } from "./AuditData";
 import { useAuditSession } from "./AuditSession";
 import { UserMenu } from "./AuditGate";
 import { SquareEditor } from "./SquareEditor";
+import { CalcRulesEditor } from "./CalcRulesEditor";
+import {
+  COMMERCIAL_FIELDS,
+  DEFAULT_CONFIG,
+  DEFAULT_RULES,
+  fieldUnit,
+  ruleToRecord,
+  type CommercialValues,
+  type FeeRule,
+  type FreightConfig,
+} from "@/lib/freight-rules";
 import { errorMessage } from "@/lib/audit-schemas";
 
 const LOGO_URL =
@@ -151,49 +162,7 @@ const icons = {
   alerts: Flag,
   settings: Settings,
 };
-const commercial = [
-  "FRETE VALOR (% SOBRE $ NF)",
-  "FRETE PESO (GATILHO)",
-  "FRETE MÍNIMO",
-  "GRIS (% SOBRE $ NF)",
-  "GRIS MÍNIMO",
-  "AD VALOREM (% SOBRE $ NF)",
-  "ADV MÍNIMO",
-  "PEDÁGIO",
-  "DESPACHO (OU COLETA)",
-  "FATOR DE CUBAGEM",
-  "TDE",
-  "TDA",
-  "SEC/CAT",
-  "TAS",
-  "TRT",
-  "TRT MÍNIMO",
-  "EMEX (R$/100KG)",
-  "EMEX (%)",
-  "EMEX MÍNIMO",
-  "TRF (%)",
-  "TRF (R$)",
-];
-const calcTypes = [
-  "Pendente de definição",
-  "Percentual sobre valor NF",
-  "Valor fixo por CT-e",
-  "Valor por kg",
-  "Faixa de peso",
-  "Valor por 100 kg",
-  "Valor por volume",
-  "Mínimo condicionado",
-  "Regra por praça / região",
-];
-const calcBases = [
-  "Valor da NF",
-  "Peso base",
-  "Peso taxado",
-  "Quantidade de volumes",
-  "Faixa de peso",
-  "Por CT-e / embarque",
-  "Praça / região",
-];
+const commercial = COMMERCIAL_FIELDS;
 const headers = [
   "numero_fatura",
   "cnpj_transportadora",
@@ -249,7 +218,14 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [tab, setTab] = useState("commercial");
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [max, setMax] = useState(false);
+  const [commercialValues, setCommercialValues] = useState<CommercialValues>({});
+  const [rules, setRules] = useState<FeeRule[]>(() => DEFAULT_RULES.map((r) => ({ ...r })));
+  const [freightConfig, setFreightConfig] = useState<FreightConfig>(DEFAULT_CONFIG);
+  const setCommercial = (name: string, patch: Partial<{ value: string; na: boolean }>) =>
+    setCommercialValues((old) => ({
+      ...old,
+      [name]: { value: old[name]?.value ?? "", na: old[name]?.na ?? false, ...patch },
+    }));
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [systemDark, setSystemDark] = useState(false);
   const [today, setToday] = useState("");
@@ -283,14 +259,17 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       if (id === "save-carrier") {
         await save({ kind: "carrier", value: { id: field("carrier-edit-id") || undefined, legal_name: field("carrier-legal"), cnpj: field("carrier-cnpj"), display_name: field("carrier-short"), active: field("carrier-active") !== "Inativa" && field("carrier-active") !== "Inativo" } });
       } else if (id === "save-rule") {
-        const commercialValues = Object.fromEntries(commercial.map((name, i) => {
-          const input = document.getElementById(`commercial-${i}`);
-          const notApplicable = input instanceof HTMLInputElement && input.disabled;
-          const value = field(`commercial-${i}`);
-          return [name, { value: notApplicable || value === "" ? null : Number(value), state: notApplicable ? "not_applicable" : value === "" ? "missing" : "provided" }];
-        }));
-        const calculation_rules = commercial.map((component) => ({ component, type: document.querySelector<HTMLSelectElement>(`select[aria-label="Tipo de cálculo ${component}"]`)?.value ?? "", base: document.querySelector<HTMLSelectElement>(`select[aria-label="Base de cálculo ${component}"]`)?.value ?? "", formula: document.querySelector<HTMLInputElement>(`input[aria-label="Fórmula ${component}"]`)?.value ?? "", unit: document.querySelector<HTMLInputElement>(`input[aria-label="Unidade ${component}"]`)?.value ?? "", condition: document.querySelector<HTMLInputElement>(`input[aria-label="Condição ${component}"]`)?.value ?? "", min: document.querySelector<HTMLInputElement>(`input[aria-label="Mínimo ${component}"]`)?.value ?? "", max: document.querySelector<HTMLInputElement>(`input[aria-label="Máximo ${component}"]`)?.value ?? "", rounding: document.querySelector<HTMLSelectElement>(`select[aria-label="Arredondamento ${component}"]`)?.value ?? "", composition: document.querySelector<HTMLSelectElement>(`select[aria-label="Composição ${component}"]`)?.value ?? "" }));
-        await save({ kind: "version", value: { carrier_id: field("rule-carrier"), branch_id: field("rule-branch"), square_id: field("rule-square") || null, destination: field("rule-destination"), valid_from: field("rule-start"), valid_until: field("rule-end") || null, commercial: commercialValues, calculation_rules, weight_bands: bands.filter((b) => b.weight || b.value).map((b) => ({ weight: b.weight ? Number(b.weight) : NaN, value: b.value ? Number(b.value) : NaN })), configuration: { max_freight: max, mode: field("rule-mode"), min_goods: field("rule-min-goods") ? Number(field("rule-min-goods")) : null, composition: field("baseComposition"), weight_integration: field("weight-integration"), trigger: document.querySelector<HTMLSelectElement>('select[aria-label="Natureza do gatilho"]')?.value ?? "" }, notes: field("rule-notes"), previous_version_id: field("rule-edit-id") || null } });
+        const commercialRecord = Object.fromEntries(
+          commercial.map((name) => {
+            const item = commercialValues[name];
+            const raw = item?.value.trim() ?? "";
+            const value = raw === "" ? NaN : Number(raw.replace(",", "."));
+            const state = item?.na ? "not_applicable" : Number.isFinite(value) ? "provided" : "missing";
+            return [name, { value: state === "provided" ? value : null, state }];
+          }),
+        );
+        const calculation_rules = rules.map((r) => ruleToRecord(r, commercialValues));
+        await save({ kind: "version", value: { carrier_id: field("rule-carrier"), branch_id: field("rule-branch"), square_id: field("rule-square") || null, destination: field("rule-destination"), valid_from: field("rule-start"), valid_until: field("rule-end") || null, commercial: commercialRecord, calculation_rules, weight_bands: bands.filter((b) => b.weight || b.value).map((b) => ({ weight: b.weight ? Number(b.weight) : NaN, value: b.value ? Number(b.value) : NaN })), configuration: { max_freight: freightConfig.composicao === "maior", mode: field("rule-mode"), min_goods: field("rule-min-goods") ? Number(field("rule-min-goods")) : null, peso_considerado: freightConfig.peso, composicao: freightConfig.composicao, frete_minimo_sobre: freightConfig.minimoSobre, icms: freightConfig.icms, weight_integration: "faixa_peso_com_excedente" }, notes: field("rule-notes"), previous_version_id: field("rule-edit-id") || null } });
       } else if (file) {
         const count = await importFile(file);
         setMessage(`${count} fatura(s) importada(s). Associação aos CT-es e auditoria pendentes.`);
@@ -443,125 +422,38 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     if (id === "commercial-components")
       return (
         <div key={key} className="comm-grid">
-          {commercial.map((name, i) => (
-            <div className="comm-card" key={name}>
-              <div className="comm-head">
-                <label className="comm-name" htmlFor={`commercial-${i}`}>
-                  {name}
-                </label>
-                <label className="na-check">
-                  <input
-                    type="checkbox"
-                    onChange={(e) => {
-                      const el = document.getElementById(`commercial-${i}`);
-                      if (el instanceof HTMLInputElement) el.disabled = e.target.checked;
-                    }}
-                  />
-                  Não aplicável
-                </label>
-              </div>
-              <input
-                id={`commercial-${i}`}
-                type="number"
-                min="0"
-                step="0.0001"
-                placeholder="Valor comercial"
-              />
-              <div className="comm-unit">
-                {name.includes("%")
-                  ? "% sobre a base definida"
-                  : name === "FATOR DE CUBAGEM"
-                    ? "kg/m³"
-                    : "Conforme unidade negociada"}
-              </div>
-              {i === 1 && (
-                <select aria-label="Natureza do gatilho">
-                  <Options
-                    values={[
-                      "Natureza do gatilho — definir",
-                      "Tarifa R$/kg",
-                      "Peso mínimo (kg)",
-                      "Valor mínimo de NF (R$)",
-                      "Referência para faixa de peso",
-                    ]}
-                  />
-                </select>
-              )}
-            </div>
-          ))}
-        </div>
-      );
-    if (id === "calc-rule-rows")
-      return (
-        <tbody key={key}>
-          {commercial.map((name) => (
-            <tr key={name}>
-              <td>{name}</td>
-              <td>
-                <select aria-label={`Tipo de cálculo ${name}`}>
-                  <Options values={calcTypes} />
-                </select>
-              </td>
-              <td>
-                <select aria-label={`Base de cálculo ${name}`}>
-                  <Options values={calcBases} />
-                </select>
-              </td>
-              <td>
+          {commercial.map((name, i) => {
+            const item = commercialValues[name];
+            return (
+              <div className={`comm-card ${item?.na ? "is-na" : ""}`} key={name}>
+                <div className="comm-head">
+                  <label className="comm-name" htmlFor={`commercial-${i}`}>
+                    {name}
+                  </label>
+                  <label className="na-check">
+                    <input
+                      type="checkbox"
+                      checked={item?.na ?? false}
+                      onChange={(e) => setCommercial(name, { na: e.target.checked })}
+                    />
+                    Não aplicável
+                  </label>
+                </div>
                 <input
-                  aria-label={`Fórmula ${name}`}
-                  placeholder="Descreva a fórmula"
-                  className="formula-input"
+                  id={`commercial-${i}`}
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  placeholder="Valor comercial"
+                  disabled={item?.na ?? false}
+                  value={item?.value ?? ""}
+                  onChange={(e) => setCommercial(name, { value: e.target.value })}
                 />
-              </td>
-              <td>
-                <input aria-label={`Unidade ${name}`} placeholder="Unidade" />
-              </td>
-              <td>
-                <input aria-label={`Condição ${name}`} placeholder="Condição de aplicação" />
-              </td>
-              {["Mínimo", "Máximo"].map((x) => (
-                <td key={x}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    placeholder="—"
-                    aria-label={`${x} ${name}`}
-                  />
-                </td>
-              ))}
-              <td>
-                <select aria-label={`Arredondamento ${name}`}>
-                  <Options
-                    values={[
-                      "2 casas decimais",
-                      "4 casas decimais",
-                      "Inteiro",
-                      "Arredondar para cima (2)",
-                    ]}
-                  />
-                </select>
-              </td>
-              <td>
-                <select aria-label={`Composição ${name}`}>
-                  <Options
-                    values={[
-                      "Frete principal",
-                      "Adicional (somar)",
-                      "Incluído em outro componente",
-                      "Substitui outro componente",
-                      "Condicionado / depende de regra",
-                    ]}
-                  />
-                </select>
-              </td>
-              <td>
-                <span className="calc-status">PENDENTE</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
+                <div className="comm-unit">{fieldUnit(name)}</div>
+              </div>
+            );
+          })}
+        </div>
       );
     if (id === "weightRows")
       return (
@@ -617,7 +509,25 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           <SquareEditor />
         </div>
       );
-    if (id === "compositionConfig" && max) return null;
+    if (id === "editor-calculation")
+      return (
+        <div key={key} id={id} className={`editor-pane ${tab === "calculation" ? "active" : ""}`}>
+          <CalcRulesEditor
+            values={commercialValues}
+            bands={bands}
+            rules={rules}
+            onRulesChange={setRules}
+            config={freightConfig}
+            onConfigChange={setFreightConfig}
+            canWrite={canWrite}
+          />
+        </div>
+      );
+    if (
+      cls === "field" &&
+      children.some((c) => typeof c !== "string" && c.attrs["id"] === "weight-integration")
+    )
+      return null;
     if (cls === "chart")
       return (
         <div className="empty-chart" key={key}>
@@ -644,10 +554,6 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     }
     if (cls.split(" ").includes("editor-pane"))
       props["className"] = `editor-pane ${id === `editor-${tab}` ? "active" : ""}`;
-    if (id === "maxRule") {
-      props["checked"] = max;
-      props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setMax(e.target.checked);
-    }
     if (id === "inv-number") { props["value"] = invoiceFilter; props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setInvoiceFilter(e.target.value); }
     if (id === "inv-from" || id === "inv-to") { delete props["defaultValue"]; props["onChange"] = (e: React.ChangeEvent<HTMLInputElement>) => setFilters((old) => ({ ...old, [id]: e.target.value })); }
     if (tag === "label") {
@@ -706,6 +612,10 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       if (["save-rule", "save-carrier", "process-invoice"].includes(id)) action = () => { void persist(id); };
       if (id === "add-rule")
         action = () => {
+          setCommercialValues({});
+          setRules(DEFAULT_RULES.map((r) => ({ ...r })));
+          setFreightConfig(DEFAULT_CONFIG);
+          setBands([{ weight: "", value: "" }]);
           setTab("commercial");
           setModal("modal-rule");
         };
