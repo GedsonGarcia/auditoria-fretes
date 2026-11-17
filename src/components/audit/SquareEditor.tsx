@@ -3,7 +3,12 @@ import { ClipboardPaste, ChevronDown, ChevronUp, MapPin, Pencil, Search } from "
 import { Button } from "@/components/ui/button";
 import { useAuditData } from "./AuditData";
 import { errorMessage } from "@/lib/audit-schemas";
-import { MAX_LOCALITIES, normalizeLocality, parseLocalities } from "@/lib/square-localities";
+import {
+  GENERAL_LOCALITY,
+  MAX_LOCALITIES,
+  normalizeLocality,
+  parseLocalities,
+} from "@/lib/square-localities";
 
 const UFS =
   "AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO".split(" ");
@@ -14,6 +19,7 @@ export function SquareEditor() {
   const [name, setName] = useState("");
   const [uf, setUf] = useState("");
   const [carrier, setCarrier] = useState("");
+  const [geral, setGeral] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [pasteBox, setPasteBox] = useState(false);
@@ -49,8 +55,17 @@ export function SquareEditor() {
     return "";
   }
 
+  const isGeneral = (id: string) => {
+    const list = bySquare.get(id);
+    return list?.length === 1 && list[0] === GENERAL_LOCALITY;
+  };
+
   async function importText(text: string) {
-    const localities = parseLocalities(text);
+    await saveList(parseLocalities(text));
+  }
+
+  async function saveList(localities: string[]) {
+    const general = localities.length === 1 && localities[0] === GENERAL_LOCALITY;
     if (!localities.length) {
       setNotice({
         tone: "error",
@@ -71,9 +86,13 @@ export function SquareEditor() {
     if (
       existing &&
       !window.confirm(
-        `A praça "${existing.name}" (${uf} · ${carrierName(carrier)}) já tem ${
-          bySquare.get(existing.id)?.length ?? 0
-        } localidade(s). Substituir pela nova lista com ${localities.length}?`,
+        `A praça "${existing.name}" (${uf} · ${carrierName(carrier)}) já existe com ${
+          isGeneral(existing.id)
+            ? "todas as localidades da UF (Geral)"
+            : `${bySquare.get(existing.id)?.length ?? 0} localidade(s)`
+        }. Substituir por ${
+          general ? "todas as localidades da UF (Geral)" : `uma nova lista com ${localities.length}`
+        }?`,
       )
     )
       return;
@@ -82,10 +101,13 @@ export function SquareEditor() {
       await saveSquare({ name: name.trim(), state: uf, carrier_id: carrier, localities });
       setNotice({
         tone: "ok",
-        text: `${localities.length} localidade(s) importada(s) para a praça "${name.trim()}" (${uf} · ${carrierName(carrier)}).`,
+        text: general
+          ? `Praça geral "${name.trim()}" salva: vale para todas as localidades de ${uf} (${carrierName(carrier)}).`
+          : `${localities.length} localidade(s) importada(s) para a praça "${name.trim()}" (${uf} · ${carrierName(carrier)}).`,
       });
       setPasteBox(false);
       setName("");
+      setGeral(false);
     } catch (error) {
       setNotice({ tone: "error", text: errorMessage(error) });
     } finally {
@@ -100,6 +122,10 @@ export function SquareEditor() {
       return;
     }
     setNotice(null);
+    if (geral) {
+      await saveList([GENERAL_LOCALITY]);
+      return;
+    }
     let text = "";
     try {
       text = await navigator.clipboard.readText();
@@ -121,9 +147,12 @@ export function SquareEditor() {
     setName(square.name);
     setUf(square.state);
     setCarrier(square.carrier_id ?? "");
+    setGeral(isGeneral(id));
     setNotice({
       tone: "ok",
-      text: `Editando "${square.name}". Copie a nova lista na planilha e clique em Importar praça para substituir as localidades.`,
+      text: isGeneral(id)
+        ? `Editando "${square.name}" (Geral). Desmarque Geral para trocar por uma lista de localidades.`
+        : `Editando "${square.name}". Copie a nova lista na planilha e clique em Importar praça para substituir as localidades.`,
     });
   }
 
@@ -139,7 +168,7 @@ export function SquareEditor() {
               <div className="panel-title">Nova praça</div>
               <div className="panel-sub">
                 Dê um nome, escolha a UF e a transportadora. Depois copie a coluna de localidades na
-                planilha do Excel e clique em Importar praça.
+                planilha do Excel e clique em Importar praça. Para a UF inteira, marque Geral.
               </div>
             </div>
           </div>
@@ -181,6 +210,21 @@ export function SquareEditor() {
                 ))}
             </select>
           </div>
+          <label className="square-general">
+            <input
+              type="checkbox"
+              checked={geral}
+              onChange={(e) => {
+                setGeral(e.target.checked);
+                if (e.target.checked && !name.trim()) setName("Geral");
+                setPasteBox(false);
+              }}
+            />
+            <span>
+              <b>Geral</b>
+              <small>Abrange todas as localidades da UF</small>
+            </span>
+          </label>
           <Button
             variant="approved"
             size="approved"
@@ -191,7 +235,7 @@ export function SquareEditor() {
             onClick={() => void importFromClipboard()}
           >
             <ClipboardPaste />
-            {busy ? "Importando…" : "Importar praça"}
+            {busy ? "Salvando…" : geral ? "Salvar praça geral" : "Importar praça"}
           </Button>
         </div>
         {pasteBox && (
@@ -275,13 +319,19 @@ export function SquareEditor() {
                         </td>
                         <td>{s.state}</td>
                         <td>{carrierName(s.carrier_id)}</td>
-                        <td>{list.length}</td>
+                        <td>
+                          {isGeneral(s.id) ? (
+                            <span className="calc-chip blue">Geral · todas da UF</span>
+                          ) : (
+                            list.length
+                          )}
+                        </td>
                         <td className="square-actions">
                           <Button
                             variant="outline"
                             size="sm"
                             type="button"
-                            disabled={!list.length}
+                            disabled={!list.length || isGeneral(s.id)}
                             onClick={() => setExpanded(open ? null : s.id)}
                           >
                             {open ? <ChevronUp /> : <ChevronDown />}
