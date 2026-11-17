@@ -30,4 +30,4 @@ Todos os itens abaixo dependem da conexão e inspeção da base externa original
 - Integrar Visão Executiva com filtros, indicadores e gráficos reais.
 - Validar fluxos completos, segurança e critérios de aceitação.
 ## Pendente
-- [ ] Aplicar migração enviada pelo usuário: praças vinculadas a transportadoras + localidades (somente banco, sem mexer em telas)
+- [x] Aplicada migração: praças vinculadas a transportadoras + localidades (somente banco)

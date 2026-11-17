@@ -107,9 +107,42 @@ export type Database = {
         }
         Relationships: []
       }
+      freight_square_localities: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          square_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          square_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          square_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "freight_square_localities_square_id_fkey"
+            columns: ["square_id"]
+            isOneToOne: false
+            referencedRelation: "freight_squares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       freight_squares: {
         Row: {
-          code: string
+          carrier_id: string | null
+          code: string | null
           created_at: string
           id: string
           name: string
@@ -117,7 +150,8 @@ export type Database = {
           state: string
         }
         Insert: {
-          code: string
+          carrier_id?: string | null
+          code?: string | null
           created_at?: string
           id?: string
           name: string
@@ -125,14 +159,23 @@ export type Database = {
           state: string
         }
         Update: {
-          code?: string
+          carrier_id?: string | null
+          code?: string | null
           created_at?: string
           id?: string
           name?: string
           notes?: string
           state?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "freight_squares_carrier_id_fkey"
+            columns: ["carrier_id"]
+            isOneToOne: false
+            referencedRelation: "carriers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       freight_table_versions: {
         Row: {
@@ -397,6 +440,15 @@ export type Database = {
       audit_can_read: { Args: never; Returns: boolean }
       audit_can_write: { Args: never; Returns: boolean }
       audit_import_invoices: { Args: { payload: Json }; Returns: number }
+      audit_save_square: {
+        Args: {
+          _carrier_id: string
+          _localities: string[]
+          _name: string
+          _state: string
+        }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
