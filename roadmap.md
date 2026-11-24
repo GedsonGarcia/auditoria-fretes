@@ -12,6 +12,9 @@
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
 - [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.
 - [ ] Conectar a base externa original — aguarda acesso à fonte de CT-es; não criar base paralela.
+  - [x] Leitura somente consulta do Databricks (`prd_ancora.003_broker_nfe_bronze`: `cte_resumo`, `cte_resumo_chaves_nfe_relacionadas`, `cte_remetente`) e teste de conexão em Configurações → Conexões, restrito a administradores; 5 testes novos.
+  - [ ] Cadastrar os Secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN` e `DATABRICKS_WAREHOUSE_ID` e rodar o teste de conexão.
+  - [ ] Com as colunas reais, mapear CT-e, NFs relacionadas e e-mail do remetente para a Auditoria de CT-es.
 - [x] Obter a referência HTML aprovada citada no escopo.
 - [x] Reproduzir somente o layout aprovado, suas seis áreas e quatro abas, sem novas páginas ou recursos; manter dados vazios enquanto a base externa não estiver conectada.
 - [x] Validar navegação, abertura das abas, inclusão visual de faixas e apresentação em computador, tablet e celular; teste de rotas aprovado.
