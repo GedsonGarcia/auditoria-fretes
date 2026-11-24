@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useAuditData } from "./AuditData";
 import { useAuditSession } from "./AuditSession";
+import { CteSourcePanel } from "./CteSourcePanel";
 import { errorMessage } from "@/lib/audit-schemas";
 
 const sections = [
@@ -241,12 +242,8 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
       ) : (
         <div className="settings-section">
           <h2>Base de documentos e cadastros</h2>
+          <CteSourcePanel admin={admin} />
           <div className="parameter-lines">
-            <div>
-              <b>Base original de CT-es</b>
-              <span>Não conectada</span>
-              <span className="tag gray">Pendente</span>
-            </div>
             <div>
               <b>Documentos DACTE / PDF</b>
               <span>Origem e permissões ainda não verificadas.</span>
@@ -254,7 +251,8 @@ export function AuditSettings({ onCarrier }: { onCarrier: () => void }) {
             </div>
           </div>
           <p className="connection-instructions">
-            Lovable Cloud conectado para cadastros e importações. Integração da base original de CT-es pendente.
+            Lovable Cloud conectado para cadastros e importações. A base original de CT-es é
+            consultada no Databricks, somente leitura, sem cópia para o Lovable Cloud.
           </p>
         </div>
       )}
