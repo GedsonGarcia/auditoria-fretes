@@ -28,9 +28,11 @@ export function CteSourcePanel({ admin }: { admin: boolean }) {
     ? { text: "Não verificada", tag: "gray" }
     : !report.configured
       ? { text: "Secrets pendentes", tag: "amber" }
-      : report.tables.every((t) => t.ok)
-        ? { text: "Conectada", tag: "green" }
-        : { text: "Com falhas", tag: "red" };
+      : report.connectionError
+        ? { text: "Sem conexão", tag: "red" }
+        : report.tables.every((t) => t.ok)
+          ? { text: "Conectada", tag: "green" }
+          : { text: "Com falhas", tag: "red" };
 
   return (
     <div className="cte-source">
@@ -55,6 +57,26 @@ export function CteSourcePanel({ admin }: { admin: boolean }) {
         <RefreshCw />
         {busy ? "Testando…" : "Testar conexão"}
       </Button>
+      {!admin && (
+        <p className="connection-instructions">Somente administradores podem testar a conexão.</p>
+      )}
+      {busy && (
+        <p className="connection-instructions" role="status">
+          Consultando o Databricks… Se o SQL Warehouse estiver desligado, ele leva de 1 a 3 minutos
+          para ligar. Mantenha esta tela aberta.
+        </p>
+      )}
+      {report?.configured === false && (
+        <p className="empty" role="alert">
+          O app não encontrou os Secrets {report.missingSecrets.join(", ")}. Confira os nomes no
+          Lovable (maiúsculas, sem espaços) e publique de novo se estiver testando o link publicado.
+        </p>
+      )}
+      {report?.connectionError && (
+        <p className="empty" role="alert">
+          {report.connectionError}
+        </p>
+      )}
       {error && (
         <p className="empty" role="alert">
           {error}

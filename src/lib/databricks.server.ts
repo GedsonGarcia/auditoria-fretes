@@ -66,6 +66,7 @@ type StatementResponse = {
   };
   result?: { data_array?: (string | null)[][] };
   message?: string;
+  statement_id?: string;
 };
 
 /** Converte a resposta JSON_ARRAY do Databricks em linhas nomeadas. */
@@ -85,6 +86,10 @@ export function parseStatementResponse(body: StatementResponse): QueryResult {
   return { columns, rows, truncated: Boolean(body.manifest?.truncated) };
 }
 
+/** Tempo máximo de espera por uma consulta, incluindo o SQL Warehouse ligar. */
+export const DATABRICKS_TIMEOUT_MS = 150_000;
+const RUNNING_STATES = new Set(["PENDING", "RUNNING"]);
+
 export async function runDatabricksQuery(
   statement: string,
   params: QueryParam[] = [],
@@ -92,41 +97,64 @@ export async function runDatabricksQuery(
     rowLimit?: number;
     config?: DatabricksConfig | undefined;
     fetchImpl?: typeof fetch;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+    sleep?: (ms: number) => Promise<void>;
   } = {},
 ): Promise<QueryResult> {
   const config = options.config ?? readDatabricksConfig();
   const doFetch = options.fetchImpl ?? fetch;
-  let response: Response;
-  try {
-    response = await doFetch(`https://${config.host}/api/2.0/sql/statements`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        warehouse_id: config.warehouseId,
-        statement,
-        parameters: params.map((p) => ({ name: p.name, value: p.value, type: p.type ?? "STRING" })),
-        wait_timeout: "30s",
-        on_wait_timeout: "CANCEL",
-        disposition: "INLINE",
-        format: "JSON_ARRAY",
-        row_limit: options.rowLimit ?? 500,
-      }),
-    });
-  } catch {
-    throw new DatabricksError("Não foi possível alcançar o Databricks. Confira o DATABRICKS_HOST.");
+  const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const deadline = Date.now() + (options.timeoutMs ?? DATABRICKS_TIMEOUT_MS);
+  const base = `https://${config.host}/api/2.0/sql/statements`;
+  const headers = { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" };
+
+  const call = async (url: string, init: RequestInit): Promise<StatementResponse> => {
+    let response: Response;
+    try {
+      response = await doFetch(url, { ...init, headers });
+    } catch {
+      throw new DatabricksError(
+        "Não foi possível alcançar o Databricks. Confira o DATABRICKS_HOST.",
+      );
+    }
+    if (response.status === 401 || response.status === 403)
+      throw new DatabricksError(
+        "O Databricks recusou o acesso. Confira o DATABRICKS_TOKEN, o uso do SQL Warehouse e as permissões de SELECT nas tabelas.",
+      );
+    const body = (await response.json().catch(() => ({}))) as StatementResponse;
+    if (!response.ok)
+      throw new DatabricksError(
+        `Databricks respondeu ${response.status}: ${body.message ?? "erro sem detalhe"}`,
+      );
+    return body;
+  };
+
+  // Espera até 30 s na própria chamada; se o warehouse ainda estiver ligando ou a consulta
+  // rodando, continua consultando o andamento até o tempo máximo.
+  let body = await call(base, {
+    method: "POST",
+    body: JSON.stringify({
+      warehouse_id: config.warehouseId,
+      statement,
+      parameters: params.map((p) => ({ name: p.name, value: p.value, type: p.type ?? "STRING" })),
+      wait_timeout: "30s",
+      on_wait_timeout: "CONTINUE",
+      disposition: "INLINE",
+      format: "JSON_ARRAY",
+      row_limit: options.rowLimit ?? 500,
+    }),
+  });
+  while (RUNNING_STATES.has(body.status?.state ?? "") && body.statement_id) {
+    if (Date.now() >= deadline) {
+      await call(`${base}/${body.statement_id}/cancel`, { method: "POST" }).catch(() => undefined);
+      throw new DatabricksError(
+        "O SQL Warehouse não respondeu a tempo (pode estar ligando). Aguarde um minuto e tente de novo.",
+      );
+    }
+    await sleep(options.pollIntervalMs ?? 3000);
+    body = await call(`${base}/${body.statement_id}`, { method: "GET" });
   }
-  if (response.status === 401 || response.status === 403)
-    throw new DatabricksError(
-      "O Databricks recusou o acesso. Confira o DATABRICKS_TOKEN e as permissões de SELECT nas tabelas.",
-    );
-  const body = (await response.json().catch(() => ({}))) as StatementResponse;
-  if (!response.ok)
-    throw new DatabricksError(
-      `Databricks respondeu ${response.status}: ${body.message ?? "erro sem detalhe"}`,
-    );
   return parseStatementResponse(body);
 }
 

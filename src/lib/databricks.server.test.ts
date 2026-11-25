@@ -134,6 +134,51 @@ describe("Databricks — leitura da base de CT-es", () => {
     }
   });
 
+  it("espera o SQL Warehouse ligar, consultando o andamento", async () => {
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(json({ statement_id: "s1", status: { state: "PENDING" } }))
+      .mockResolvedValueOnce(json({ statement_id: "s1", status: { state: "RUNNING" } }))
+      .mockResolvedValueOnce(
+        json({
+          statement_id: "s1",
+          status: { state: "SUCCEEDED" },
+          manifest: { schema: { columns: [{ name: "x" }] } },
+          result: { data_array: [["1"]] },
+        }),
+      );
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const result = await runDatabricksQuery("SELECT 1", [], { config, fetchImpl, sleep });
+    expect(result.rows).toEqual([{ x: "1" }]);
+    expect(JSON.parse(fetchImpl.mock.calls[0]![1].body).on_wait_timeout).toBe("CONTINUE");
+    expect(fetchImpl.mock.calls[1]![0]).toBe(
+      "https://adb-1.azuredatabricks.net/api/2.0/sql/statements/s1",
+    );
+    expect(fetchImpl.mock.calls[1]![1].method).toBe("GET");
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancela e explica quando o warehouse não responde a tempo", async () => {
+    const fetchImpl = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ statement_id: "s2", status: { state: "PENDING" } }), {
+          status: 200,
+        }),
+    );
+    await expect(
+      runDatabricksQuery("SELECT 1", [], {
+        config,
+        fetchImpl,
+        timeoutMs: 0,
+        sleep: async () => undefined,
+      }),
+    ).rejects.toThrow(/não respondeu a tempo/);
+    expect(fetchImpl.mock.calls.at(-1)![0]).toBe(
+      "https://adb-1.azuredatabricks.net/api/2.0/sql/statements/s2/cancel",
+    );
+  });
+
   it("explica acesso recusado", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 403 }));
     await expect(runDatabricksQuery("SELECT 1", [], { config, fetchImpl })).rejects.toThrow(
