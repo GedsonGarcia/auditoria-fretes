@@ -39,6 +39,37 @@ export function CteDetails({ record, onClose }: { record: CteRecord | null; onCl
                 <span>Situação</span>
                 <b>{record.status}</b>
               </div>
+              {record.source && (
+                <>
+                  <div>
+                    <span>Emissão</span>
+                    <b>{record.issuedAt}</b>
+                  </div>
+                  <div>
+                    <span>Remetente</span>
+                    <b>{record.source.sender || "Não informado"}</b>
+                  </div>
+                  <div>
+                    <span>Tomador</span>
+                    <b>{record.source.payer || "Não informado"}</b>
+                  </div>
+                  <div>
+                    <span>Origem → destino</span>
+                    <b>
+                      {record.source.origin || "Não informado"} →{" "}
+                      {record.source.destination || "Não informado"}
+                    </b>
+                  </div>
+                  <div>
+                    <span>Valor da mercadoria</span>
+                    <b>{formatFreight(record.merchandise)}</b>
+                  </div>
+                  <div>
+                    <span>NF-es</span>
+                    <b>{record.invoices}</b>
+                  </div>
+                </>
+              )}
             </div>
             <div className="comparison-table table-wrap">
               <table>
@@ -113,16 +144,18 @@ export function CteDetails({ record, onClose }: { record: CteRecord | null; onCl
 export function CteRows({
   records,
   onSelect,
+  emptyText = "Nenhum registro disponível. Base não conectada.",
 }: {
   records: CteRecord[];
   onSelect: (record: CteRecord) => void;
+  emptyText?: string;
 }) {
   return (
     <tbody id="cte-list">
       {records.length === 0 ? (
         <tr>
           <td colSpan={13} className="empty">
-            Nenhum registro disponível. Base não conectada.
+            {emptyText}
           </td>
         </tr>
       ) : (

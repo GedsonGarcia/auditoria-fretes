@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildCteListQuery,
   DatabricksError,
+  listSourceCtes,
   missingDatabricksSecrets,
   parseStatementResponse,
   readDatabricksConfig,
@@ -72,6 +74,64 @@ describe("Databricks — leitura da base de CT-es", () => {
       format: "JSON_ARRAY",
     });
     expect(init.body).not.toContain('"t"');
+  });
+
+  it("monta a lista de CT-es com SQL fixo e filtros só como parâmetros", () => {
+    const { statement, params, limit } = buildCteListQuery({
+      from: "2026-11-01",
+      to: "2026-11-25",
+      search: "50%_x' OR 1=1",
+      carrierCnpj: "19.694.199/0001-23",
+      branchCnpj: "05916095000101",
+      limit: 9999,
+    });
+    expect(limit).toBe(500);
+    expect(statement).toContain("106_logistica_silver`.tb_fato_broker_cte_conhecimento_transporte");
+    expect(statement).toContain("NOT fl_deleted");
+    expect(statement).toContain("LIMIT 501");
+    expect(statement).not.toContain("1=1");
+    expect(statement).not.toContain("2026-11-01");
+    expect(params).toEqual([
+      { name: "from_date", value: "2026-11-01", type: "DATE" },
+      { name: "to_date", value: "2026-11-25", type: "DATE" },
+      { name: "search", value: "50%_x' OR 1=1" },
+      { name: "search_like", value: "%50\\%\\_x' OR 1=1%" },
+      { name: "carrier_cnpj", value: "19694199000123" },
+      { name: "branch_cnpj", value: "05916095000101" },
+    ]);
+  });
+
+  it("sem filtros opcionais, consulta só o período", () => {
+    const { statement, params } = buildCteListQuery({ from: "2026-11-01", to: "2026-11-02" });
+    expect(params.map((p) => p.name)).toEqual(["from_date", "to_date"]);
+    expect(statement).not.toContain(":search");
+    expect(statement).toContain("LIMIT 201");
+  });
+
+  it("indica quando há mais CT-es que o limite", async () => {
+    const data_array = [["1"], ["2"], ["3"]];
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: { state: "SUCCEEDED" },
+          manifest: { schema: { columns: [{ name: "id_cte" }] } },
+          result: { data_array },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchImpl);
+    try {
+      const result = await listSourceCtes(
+        { from: "2026-11-01", to: "2026-11-02", limit: 2 },
+        config,
+      );
+      expect(result.rows).toEqual([{ id_cte: "1" }, { id_cte: "2" }]);
+      expect(result.truncated).toBe(true);
+      expect(JSON.parse(fetchImpl.mock.calls[0]![1].body).row_limit).toBe(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("explica acesso recusado", async () => {

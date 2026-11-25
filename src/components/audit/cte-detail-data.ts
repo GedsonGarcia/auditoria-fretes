@@ -22,6 +22,21 @@ export interface CteRecord {
   calculationMemory?: string;
   dacteUrl?: string;
   components: { name: string; carrier: FreightAmount; audited: FreightAmount }[];
+  /** Dados de identificação lidos da base original (Databricks), quando disponíveis. */
+  source?: CteSourceDetails;
+}
+
+export interface CteSourceDetails {
+  carrierCnpj: string;
+  sender: string;
+  senderCnpj: string;
+  recipientCnpj: string;
+  payer: string;
+  payerCnpj: string;
+  origin: string;
+  destination: string;
+  cfop: string;
+  invoiceKeys: string[];
 }
 
 export function formatFreight(amount: FreightAmount): string {
