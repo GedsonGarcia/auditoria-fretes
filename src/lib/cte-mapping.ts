@@ -16,7 +16,7 @@ function text(row: SilverCteRow, column: string): string {
 /** Converte um decimal da origem ("1234.56") sem estimar ausências. */
 export function parseSourceDecimal(value: string | null | undefined): number | null {
   const raw = value?.trim();
-  if (!raw || !/^-?\d+(\.\d+)?$/.test(raw)) return null;
+  if (!raw || !/^-?\d+(\.\d+)?(E[-+]?\d+)?$/i.test(raw)) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -70,21 +70,75 @@ export function formatIssuedAt(value: string | null | undefined): string {
   });
 }
 
+type Quantity = { name: string; value: number | null };
+const REAL_WEIGHT = /^(PESO( REAL| BRUTO| DECLARADO| AFERIDO| NOTA)?|KG)$/i;
+const CUBIC = /^(M3|CUBAGEM|METROS CUBICOS)$/i;
+
 /**
  * Peso informado no CT-e. A origem traz cada tipo de medida pelo nome
  * (ex.: "PESO REAL", "PESO CUBADO"); todos os pesos são mostrados, sem escolher um
  * como base de cálculo, pois essa regra pertence à tabela comercial.
  */
-function formatWeight(quantities: { name: string; value: number | null }[]): string {
+function formatCteWeight(quantities: Quantity[]): string | null {
   const weights = quantities.filter((q) => /PESO/i.test(q.name) && q.value !== null);
-  if (!weights.length) return NOT_INFORMED;
+  if (!weights.length) return null;
   if (weights.length === 1) return numberBr(weights[0]!.value!, 2);
   return weights
     .map((q) => `${q.name.replace(/^PESO\s+/i, "").toLowerCase()} ${numberBr(q.value!, 2)}`)
     .join(" · ");
 }
 
-function formatVolumes(quantities: { name: string; value: number | null }[]): string {
+/** Peso das NF-es do CT-e (peso bruto da NF-e, tabela nfe_transporte). */
+export type NfWeight = { total: number; withWeight: number; grossKg: number | null };
+
+function readNfWeight(row: SilverCteRow): NfWeight | null {
+  const total = parseSourceDecimal(row["nf_total"]);
+  if (!total) return null;
+  return {
+    total,
+    withWeight: parseSourceDecimal(row["nf_com_peso"]) ?? 0,
+    grossKg: parseSourceDecimal(row["nf_peso_bruto"]),
+  };
+}
+
+/**
+ * Peso real usado na auditoria: o do CT-e quando a origem o traz; senão, a soma do
+ * peso bruto das NF-es, só quando todas as NF-es do CT-e têm peso (nunca parcial).
+ */
+export function resolveRealWeight(
+  quantities: Quantity[],
+  nf: NfWeight | null,
+): { kg: number; source: "cte" | "nfe" } | null {
+  const fromCte = quantities.find((q) => REAL_WEIGHT.test(q.name.trim()) && (q.value ?? 0) > 0);
+  if (fromCte) return { kg: fromCte.value!, source: "cte" };
+  if (nf && nf.withWeight === nf.total && (nf.grossKg ?? 0) > 0)
+    return { kg: nf.grossKg!, source: "nfe" };
+  return null;
+}
+
+function formatNfWeight(nf: NfWeight | null): string {
+  if (!nf || !nf.withWeight || nf.grossKg === null) return NOT_INFORMED;
+  if (nf.withWeight === nf.total) return `${numberBr(nf.grossKg, 2)} (NF-e)`;
+  return `Parcial: ${numberBr(nf.grossKg, 2)} em ${nf.withWeight} de ${nf.total} NF-es`;
+}
+
+/** "2 - SAO - SAO PAULO" → "SAO PAULO" (prefixos de rota que algumas transportadoras usam). */
+export function cleanMunicipality(value: string): string {
+  const parts = value.split(/\s+-\s+/);
+  return (parts[parts.length - 1] ?? "").trim();
+}
+
+/** Data de emissão (YYYY-MM-DD) no horário de Brasília, para achar a tabela vigente. */
+export function issuedOnDate(value: string | null | undefined): string {
+  const raw = value?.trim();
+  if (!raw) return "";
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw.replace(" ", "T")}Z`);
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+function formatVolumes(quantities: Quantity[]): string {
   const volumes = quantities.filter((q) => /VOLUME/i.test(q.name) && q.value !== null);
   if (!volumes.length) return NOT_INFORMED;
   const total = volumes.reduce((sum, q) => sum + q.value!, 0);
@@ -114,6 +168,15 @@ export function mapSilverCte(row: SilverCteRow): CteRecord {
     n.replace(/^0+(?=\d)/, ""),
   );
   const key = text(row, "nr_chave_acesso_cte");
+  const nfWeight = readNfWeight(row);
+  const realWeight = resolveRealWeight(quantities, nfWeight);
+  const cubic = quantities.find((q) => CUBIC.test(q.name.trim()) && q.value !== null);
+  const originCity =
+    text(row, "remetente_municipio") || cleanMunicipality(text(row, "nm_municipio_inicio"));
+  const originState = text(row, "remetente_uf") || text(row, "sg_uf_inicio");
+  const destinationCity =
+    text(row, "destinatario_municipio") || cleanMunicipality(text(row, "nm_municipio_termino"));
+  const destinationState = text(row, "destinatario_uf") || text(row, "sg_uf_termino");
   return {
     id: text(row, "id_cte") || key,
     number: text(row, "nr_cte").replace(/^0+(?=\d)/, "") || NOT_INFORMED,
@@ -123,7 +186,7 @@ export function mapSilverCte(row: SilverCteRow): CteRecord {
     branch: text(row, "nm_envolvido") || NOT_INFORMED,
     recipient: text(row, "nm_destinatario") || NOT_INFORMED,
     merchandise: toFreightAmount(row["vl_total_carga"]),
-    weight: formatWeight(quantities),
+    weight: formatCteWeight(quantities) ?? formatNfWeight(nfWeight),
     volumes: formatVolumes(quantities),
     invoices: invoiceNumbers.length ? invoiceNumbers.join(", ") : NOT_INFORMED,
     freight: toFreightAmount(row["vl_total_prestacao_servico"]),
@@ -138,8 +201,18 @@ export function mapSilverCte(row: SilverCteRow): CteRecord {
       recipientCnpj: text(row, "nr_cnpj_cpf_destinatario"),
       payer: text(row, "nm_tomador"),
       payerCnpj: text(row, "nr_cnpj_cpf_tomador"),
-      origin: placeLabel(text(row, "nm_municipio_inicio"), text(row, "sg_uf_inicio")),
-      destination: placeLabel(text(row, "nm_municipio_termino"), text(row, "sg_uf_termino")),
+      senderEmail: text(row, "remetente_email"),
+      origin: placeLabel(originCity, originState),
+      originCity,
+      originState,
+      destination: placeLabel(destinationCity, destinationState),
+      destinationCity,
+      destinationState,
+      issuedOn: issuedOnDate(row["dt_emissao"]),
+      realWeightKg: realWeight?.kg ?? null,
+      realWeightSource: realWeight?.source ?? null,
+      cubicMeters: cubic?.value ?? null,
+      nfWeight,
       cfop: text(row, "cd_cfop"),
       invoiceKeys: splitSourceList(row["nr_chaves_acesso_notas"]),
     },

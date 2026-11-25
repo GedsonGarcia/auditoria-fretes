@@ -2285,6 +2285,7 @@ td {
   color: var(--muted);
   font-size: 12px;
   margin: 6px 0;
+  white-space: pre-line;
 }
 .detail-footer {
   display: flex;

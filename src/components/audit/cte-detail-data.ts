@@ -24,6 +24,10 @@ export interface CteRecord {
   components: { name: string; carrier: FreightAmount; audited: FreightAmount }[];
   /** Dados de identificação lidos da base original (Databricks), quando disponíveis. */
   source?: CteSourceDetails;
+  /** Preenchido pela auditoria automática (tabela comercial vigente). */
+  auditOutcome?: CteAuditOutcome;
+  /** true quando a auditoria usou dados aproximados (ex.: peso das NF-es, sem cubagem). */
+  auditPreliminary?: boolean;
 }
 
 export interface CteSourceDetails {
@@ -37,7 +41,22 @@ export interface CteSourceDetails {
   destination: string;
   cfop: string;
   invoiceKeys: string[];
+  senderEmail?: string;
+  originCity?: string;
+  originState?: string;
+  destinationCity?: string;
+  destinationState?: string;
+  /** Data de emissão (YYYY-MM-DD, Brasília), para achar a tabela vigente. */
+  issuedOn?: string;
+  /** Peso real usado na auditoria: do CT-e ou, sem ele, soma do peso bruto das NF-es. */
+  realWeightKg?: number | null;
+  realWeightSource?: "cte" | "nfe" | null;
+  cubicMeters?: number | null;
+  nfWeight?: { total: number; withWeight: number; grossKg: number | null } | null;
 }
+
+/** Resultado da auditoria automática de um CT-e. */
+export type CteAuditOutcome = "conforme" | "acima" | "abaixo" | "pendente";
 
 export function formatFreight(amount: FreightAmount): string {
   if (amount.status === "informed") {

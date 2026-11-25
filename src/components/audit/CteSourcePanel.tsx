@@ -40,7 +40,7 @@ export function CteSourcePanel({ admin }: { admin: boolean }) {
           <span>
             {report?.configured === false
               ? `Cadastre nos Secrets do Lovable: ${report.missingSecrets.join(", ")}.`
-              : "Consulta somente leitura à fato prd_ancora.106_logistica_silver.tb_fato_broker_cte_conhecimento_transporte."}
+              : "Consulta somente leitura à fato silver de CT-es (106_logistica_silver) e às tabelas de remetente, destinatário e NF-e do 003_broker_nfe_bronze."}
           </span>
           <span className={`tag ${status.tag}`}>{status.text}</span>
         </div>

@@ -40,6 +40,7 @@ import {
   type CteSearchRequest,
 } from "./useCteList";
 import { linkInvoices } from "@/lib/cte-mapping";
+import { auditCte } from "@/lib/cte-audit";
 import layout from "./approved-layout.json";
 import { useAuditData } from "./AuditData";
 import { useAuditSession } from "./AuditSession";
@@ -263,7 +264,9 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   );
   const sourceCtes = ctes.length
     ? ctes
-    : linkInvoices(cteSource.result?.records ?? [], data.items, data.invoices);
+    : linkInvoices(cteSource.result?.records ?? [], data.items, data.invoices).map((record) =>
+        auditCte(record, data),
+      );
   const cteRecords = sourceCtes.filter((record) => {
     const linkFilter = filters["cte-invoice-filter"] ?? "all";
     const invoiceFilter = filters["cte-invoice"] ?? "all";
@@ -590,7 +593,8 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
             ? cteRecords.filter((r) => r.invoice).length
             : id === "cte-kpi-open"
               ? cteRecords.filter((r) => !r.invoice).length
-              : "—";
+              : cteRecords.filter((r) => r.auditOutcome === "acima" || r.auditOutcome === "abaixo")
+                  .length;
       return (
         <div key={key} className="kpi-val" id={id}>
           {typeof value === "number" ? value.toLocaleString("pt-BR") : value}

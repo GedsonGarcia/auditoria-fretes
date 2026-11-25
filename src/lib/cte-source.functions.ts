@@ -21,6 +21,10 @@ export type CteSourceReport = {
 
 const labels = {
   conhecimentos: "CT-es do Broker (emissão, partes, NF-es, valores e componentes)",
+  remetente: "Remetente do CT-e (e-mail e município)",
+  destinatario: "Destinatário do CT-e (município)",
+  nfeCabecalho: "NF-e (chave de acesso)",
+  nfeTransporte: "Transporte da NF-e (peso bruto)",
 } as const;
 
 /**

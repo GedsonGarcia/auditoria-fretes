@@ -14,7 +14,9 @@
 - [ ] Conectar a base externa original — aguarda acesso à fonte de CT-es; não criar base paralela.
   - [x] Leitura somente consulta do Databricks (`prd_ancora.003_broker_nfe_bronze`: `cte_resumo`, `cte_resumo_chaves_nfe_relacionadas`, `cte_remetente`) e teste de conexão em Configurações → Conexões, restrito a administradores; 5 testes novos.
   - [ ] Cadastrar os Secrets `DATABRICKS_HOST`, `DATABRICKS_TOKEN` e `DATABRICKS_WAREHOUSE_ID` e rodar o teste de conexão.
-  - [ ] Com as colunas reais, mapear CT-e, NFs relacionadas e e-mail do remetente para a Auditoria de CT-es.
+  - [x] Com as colunas reais, mapear CT-e, NFs relacionadas e e-mail do remetente para a Auditoria de CT-es (fato silver + remetente, destinatário e peso bruto das NF-es nas bronze).
+  - [x] Auditoria automática pela tabela vigente (motor `simulate`), preliminar quando o peso vem das NF-es ou falta cubagem; pendente com motivo quando falta dado ou tabela.
+  - [ ] Pedir ao time de dados para retomar a carga de `cte_componente_valor_prestacao` e `cte_informacoes_quantidades_carga`: só há dados de CT-es emitidos até 13/03/2025.
 - [x] Obter a referência HTML aprovada citada no escopo.
 - [x] Reproduzir somente o layout aprovado, suas seis áreas e quatro abas, sem novas páginas ou recursos; manter dados vazios enquanto a base externa não estiver conectada.
 - [x] Validar navegação, abertura das abas, inclusão visual de faixas e apresentação em computador, tablet e celular; teste de rotas aprovado.
