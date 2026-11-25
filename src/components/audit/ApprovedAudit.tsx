@@ -33,7 +33,12 @@ import {
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
 import type { CteRecord } from "./cte-detail-data";
-import { defaultCtePeriod, useCteList } from "./useCteList";
+import {
+  defaultCtePeriod,
+  sameCteFilters,
+  useCteList,
+  type CteSearchRequest,
+} from "./useCteList";
 import { linkInvoices } from "@/lib/cte-mapping";
 import layout from "./approved-layout.json";
 import { useAuditData } from "./AuditData";
@@ -238,14 +243,22 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
   const [ctePeriod, setCtePeriod] = useState(defaultCtePeriod);
   const [cteSearch, setCteSearch] = useState("");
+  const cteDraft = {
+    from: ctePeriod.from,
+    to: ctePeriod.to,
+    search: cteSearch.trim() || undefined,
+    carrierCnpj: data.carriers.find((c) => c.id === filters["cte-carrier"])?.cnpj,
+    branchCnpj: data.branches.find((b) => b.id === filters["cte-branch"])?.cnpj,
+  };
+  // A tela abre com o mês corrente; depois, só consulta ao clicar em Buscar (ou Enter na busca).
+  const [cteRequest, setCteRequest] = useState<CteSearchRequest>(() => ({
+    input: defaultCtePeriod(),
+    nonce: 0,
+  }));
+  const searchCtes = () => setCteRequest((old) => ({ input: cteDraft, nonce: old.nonce + 1 }));
+  const cteFiltersPending = !sameCteFilters(cteDraft, cteRequest.input);
   const cteSource = useCteList(
-    {
-      from: ctePeriod.from,
-      to: ctePeriod.to,
-      search: cteSearch.trim() || undefined,
-      carrierCnpj: data.carriers.find((c) => c.id === filters["cte-carrier"])?.cnpj,
-      branchCnpj: data.branches.find((b) => b.id === filters["cte-branch"])?.cnpj,
-    },
+    cteRequest,
     view === "ctes" && Boolean(user) && data.roles.length > 0 && ctes.length === 0,
   );
   const sourceCtes = ctes.length
@@ -534,16 +547,38 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           maxLength={80}
           value={cteSearch}
           onChange={(e) => setCteSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!cteSource.loading) searchCtes();
+          }}
         />
       );
     if (id === "cte-count")
       return (
-        <span key={key} className="filter-meta" id={id}>
-          {cteSource.loading
-            ? "Consultando…"
-            : cteSource.result
-              ? `${cteRecords.length} CT-e(s)${cteSource.result.truncated ? " · mostrando os mais recentes; refine os filtros" : ""}`
-              : ""}
+        <span key={key} className="cte-search-actions">
+          <Button
+            type="button"
+            variant="approved"
+            size="approved"
+            className="btn btn-primary"
+            id="cte-search-button"
+            onClick={searchCtes}
+            disabled={cteSource.loading || !user || !data.roles.length}
+          >
+            <Search aria-hidden="true" />
+            {cteSource.loading ? "Buscando…" : "Buscar"}
+          </Button>
+          <span className="filter-meta" id={id} role="status">
+            {cteSource.loading
+              ? "Consultando a base de CT-es…"
+              : cteFiltersPending
+                ? "Filtros alterados · clique em Buscar"
+                : cteSource.result
+                  ? `${cteRecords.length} CT-e(s)${cteSource.result.truncated ? " · mostrando os mais recentes; refine os filtros" : ""}`
+                  : ""}
+          </span>
         </span>
       );
     if (["cte-kpi-total", "cte-kpi-linked", "cte-kpi-open", "cte-kpi-alert"].includes(id)) {

@@ -521,6 +521,15 @@ h1 {
   padding-bottom: 8px;
   margin-left: auto;
 }
+.cte-search-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cte-search-actions .filter-meta {
+  margin-left: 0;
+}
 .kpis {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1232,6 +1241,9 @@ tbody tr:hover {
     width: 100%;
     margin: 0;
     padding: 0;
+  }
+  .cte-search-actions {
+    width: 100%;
   }
   .kpis {
     grid-template-columns: repeat(2, 1fr);

@@ -10,41 +10,45 @@ export type CteListState = {
   result: CteListResult | null;
 };
 
+/** Pedido de busca: os filtros aplicados e um número que muda a cada clique em Buscar. */
+export type CteSearchRequest = { input: CteListInput; nonce: number };
+
 /** Primeiro dia do mês corrente até hoje, no horário de Brasília (YYYY-MM-DD). */
 export function defaultCtePeriod(now = new Date()): { from: string; to: string } {
   const today = now.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   return { from: `${today.slice(0, 8)}01`, to: today };
 }
 
+/** Compara filtros ignorando campos vazios (para avisar que há filtros não aplicados). */
+export function sameCteFilters(a: CteListInput, b: CteListInput): boolean {
+  const norm = (v: CteListInput) =>
+    JSON.stringify([v.from, v.to, v.search?.trim() || "", v.carrierCnpj || "", v.branchCnpj || ""]);
+  return norm(a) === norm(b);
+}
+
 /**
- * Consulta a base original de CT-es sob demanda. `enabled` evita a chamada sem login
- * ou fora da tela de CT-es; a busca por texto espera o usuário parar de digitar.
+ * Consulta a base original de CT-es somente quando um pedido é feito (abertura da tela
+ * ou clique em Buscar). Mudar filtros sem buscar não consulta o Databricks.
+ * `enabled` evita a chamada sem login, sem perfil ou fora da tela de CT-es.
  */
-export function useCteList(input: CteListInput, enabled: boolean): CteListState {
+export function useCteList(request: CteSearchRequest, enabled: boolean): CteListState {
   const fetchCtes = useServerFn(listCtes);
   const [state, setState] = useState<CteListState>({ loading: false, error: "", result: null });
-  const key = JSON.stringify(input);
+  const key = JSON.stringify(request);
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    const timer = window.setTimeout(
-      () => {
-        setState((old) => ({ ...old, loading: true, error: "" }));
-        fetchCtes({ data: JSON.parse(key) as CteListInput })
-          .then((result) => {
-            if (!cancelled) setState({ loading: false, error: "", result });
-          })
-          .catch((error: unknown) => {
-            if (!cancelled) setState({ loading: false, error: errorMessage(error), result: null });
-          });
-      },
-      input.search ? 400 : 0,
-    );
+    setState((old) => ({ ...old, loading: true, error: "" }));
+    fetchCtes({ data: (JSON.parse(key) as CteSearchRequest).input })
+      .then((result) => {
+        if (!cancelled) setState({ loading: false, error: "", result });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ loading: false, error: errorMessage(error), result: null });
+      });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, enabled, fetchCtes]);
   return state;
 }
