@@ -16,6 +16,8 @@ export type CteSourceReport = {
   configured: boolean;
   missingSecrets: string[];
   checkedAt: string;
+  /** Falha antes de consultar as tabelas (host, token, warehouse ou tempo esgotado). */
+  connectionError?: string;
   tables: SourceTableReport[];
 };
 
@@ -48,6 +50,21 @@ export const inspectCteSource = createServerFn({ method: "POST" })
 
     const config = db.readDatabricksConfig();
     const keys = Object.keys(db.CTE_SOURCE_TABLES) as (keyof typeof db.CTE_SOURCE_TABLES)[];
+    // Consulta mínima primeiro: liga o SQL Warehouse e confere host, token e warehouse
+    // uma vez só, com uma mensagem única se algo estiver errado.
+    try {
+      await db.runDatabricksQuery("SELECT 1", [], { config, rowLimit: 1 });
+    } catch (error) {
+      const message =
+        error instanceof db.DatabricksError ? error.message : "Falha inesperada na consulta.";
+      return {
+        configured: true,
+        missingSecrets: [],
+        checkedAt,
+        connectionError: message,
+        tables: [],
+      };
+    }
     const tables = await Promise.all(
       keys.map(async (key): Promise<SourceTableReport> => {
         const base = { table: db.CTE_SOURCE_TABLES[key].replace(/`/g, ""), label: labels[key] };

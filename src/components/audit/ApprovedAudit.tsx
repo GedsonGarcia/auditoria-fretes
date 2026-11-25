@@ -278,7 +278,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     return true;
   });
   const cteEmptyText = cteSource.loading
-    ? "Consultando a base de CT-es…"
+    ? "Consultando a base de CT-es… Se o SQL Warehouse estiver desligado, pode levar de 1 a 3 minutos."
     : cteSource.error
       ? cteSource.error
       : cteSource.result && !cteSource.result.configured
