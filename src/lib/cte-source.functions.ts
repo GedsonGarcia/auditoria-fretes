@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { CteRecord } from "@/components/audit/cte-detail-data";
+import { mapSilverCte } from "./cte-mapping";
+import { cteListSchema } from "./cte-list-schema";
 
 export type SourceTableReport = {
   table: string;
@@ -17,9 +20,7 @@ export type CteSourceReport = {
 };
 
 const labels = {
-  resumo: "CT-e (resumo e data de emissão)",
-  nfes: "Ligação CT-e → NF",
-  remetente: "Remetente (indústria)",
+  conhecimentos: "CT-es do Broker (emissão, partes, NF-es, valores e componentes)",
 } as const;
 
 /**
@@ -58,4 +59,48 @@ export const inspectCteSource = createServerFn({ method: "POST" })
       }),
     );
     return { configured: true, missingSecrets: [], checkedAt, tables };
+  });
+
+export type CteListResult = {
+  configured: boolean;
+  missingSecrets: string[];
+  records: CteRecord[];
+  truncated: boolean;
+  checkedAt: string;
+};
+
+/**
+ * Lista CT-es da base original (fato silver no Databricks) para a Auditoria de CT-es.
+ * Leitura sob demanda: nada é gravado no Lovable Cloud. Exige usuário com perfil ativo.
+ */
+export const listCtes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => cteListSchema.parse(value))
+  .handler(async ({ context, data }): Promise<CteListResult> => {
+    const roles = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    if (roles.error) throw new Error("Não foi possível verificar as permissões.");
+    if (!roles.data.length) throw new Error("Acesso pendente de autorização do administrador.");
+
+    const db = await import("./databricks.server");
+    const checkedAt = new Date().toISOString();
+    const missingSecrets = db.missingDatabricksSecrets();
+    if (missingSecrets.length)
+      return { configured: false, missingSecrets, records: [], truncated: false, checkedAt };
+    try {
+      const { rows, truncated } = await db.listSourceCtes(data);
+      return {
+        configured: true,
+        missingSecrets: [],
+        records: rows.map(mapSilverCte),
+        truncated,
+        checkedAt,
+      };
+    } catch (error) {
+      throw new Error(
+        error instanceof db.DatabricksError ? error.message : "Falha inesperada na consulta.",
+      );
+    }
   });

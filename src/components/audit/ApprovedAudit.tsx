@@ -33,6 +33,8 @@ import {
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
 import type { CteRecord } from "./cte-detail-data";
+import { defaultCtePeriod, useCteList } from "./useCteList";
+import { linkInvoices } from "@/lib/cte-mapping";
 import layout from "./approved-layout.json";
 import { useAuditData } from "./AuditData";
 import { useAuditSession } from "./AuditSession";
@@ -234,6 +236,44 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [freightConfig, setFreightConfig] = useState<FreightConfig>(DEFAULT_CONFIG);
   const [tableSearch, setTableSearch] = useState("");
   const [editingVersion, setEditingVersion] = useState<string | null>(null);
+  const [ctePeriod, setCtePeriod] = useState(defaultCtePeriod);
+  const [cteSearch, setCteSearch] = useState("");
+  const cteSource = useCteList(
+    {
+      from: ctePeriod.from,
+      to: ctePeriod.to,
+      search: cteSearch.trim() || undefined,
+      carrierCnpj: data.carriers.find((c) => c.id === filters["cte-carrier"])?.cnpj,
+      branchCnpj: data.branches.find((b) => b.id === filters["cte-branch"])?.cnpj,
+    },
+    view === "ctes" && Boolean(user) && data.roles.length > 0 && ctes.length === 0,
+  );
+  const sourceCtes = ctes.length
+    ? ctes
+    : linkInvoices(cteSource.result?.records ?? [], data.items, data.invoices);
+  const cteRecords = sourceCtes.filter((record) => {
+    const linkFilter = filters["cte-invoice-filter"] ?? "all";
+    const invoiceFilter = filters["cte-invoice"] ?? "all";
+    if (linkFilter === "with" && !record.invoice) return false;
+    if (linkFilter === "without" && record.invoice) return false;
+    if (invoiceFilter === "none" && record.invoice) return false;
+    if (invoiceFilter !== "all" && invoiceFilter !== "none")
+      return record.invoice.split(", ").includes(invoiceFilter);
+    return true;
+  });
+  const cteEmptyText = cteSource.loading
+    ? "Consultando a base de CT-es…"
+    : cteSource.error
+      ? cteSource.error
+      : cteSource.result && !cteSource.result.configured
+        ? "Base de CT-es não configurada. Peça ao administrador para testar a conexão em Configurações."
+        : cteSource.result
+          ? "Nenhum CT-e encontrado para os filtros."
+          : !user
+            ? "Entre para consultar os CT-es."
+            : data.roles.length
+              ? "Nenhum registro disponível."
+              : "Acesso pendente de autorização do administrador.";
   const fillRuleForm = (values: Record<string, string>) =>
     window.setTimeout(() => {
       for (const [fieldId, value] of Object.entries(values)) {
@@ -359,7 +399,12 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     setModal(null);
   };
   function render(node: LayoutNode, key: string): ReactNode {
-    if (typeof node === "string") return node.includes("Campos legados preservados") ? null : node.replaceAll("Nenhum registro disponível. Base não conectada.", "Nenhum registro disponível.");
+    if (typeof node === "string") {
+      if (node.includes("Campos legados preservados")) return null;
+      if (view === "ctes" && node.trim() === "Base ilustrativa")
+        return cteSource.result?.configured ? "Databricks · somente leitura" : "Base não conectada";
+      return node.replaceAll("Nenhum registro disponível. Base não conectada.", "Nenhum registro disponível.");
+    }
     const { tag, attrs, children } = node;
     const id = String(attrs["id"] || "");
     const cls = String(attrs["class"] || "");
@@ -437,6 +482,86 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       const bills = data.invoices.filter((v) => v.number.toLowerCase().includes(invoiceFilter.toLowerCase()) && (!filters["inv-from"] || v.issued_on >= filters["inv-from"]) && (!filters["inv-to"] || v.issued_on <= filters["inv-to"]) && (!filters["inv-carrier"] || v.carrier_id === filters["inv-carrier"]) && (!filters["inv-branch"] || data.items.some((i) => i.invoice_id === v.id && i.branch_id === filters["inv-branch"])));
       return <tbody key={key}>{bills.length ? bills.map((v) => <tr key={v.id}>{(id === "upload-history" ? [v.number, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", "), v.issued_on] : [v.number, v.issued_on, data.carriers.find((c) => c.id === v.carrier_id)?.legal_name, [...new Set(data.items.filter((i) => i.invoice_id === v.id).map((i) => data.branches.find((b) => b.id === i.branch_id)?.name))].join(", ")]).map((text, index) => <td key={index}>{text}</td>)}<td>Pendente</td><td>{money(v.declared_total)}</td><td>{v.status}</td><td>—</td></tr>) : emptyRow(8)}</tbody>;
     }
+    if (id === "cte-invoice-filter" || id === "cte-invoice") {
+      const options =
+        id === "cte-invoice-filter"
+          ? [
+              { value: "all", label: "Todos os CT-es" },
+              { value: "with", label: "Somente com fatura" },
+              { value: "without", label: "Somente sem fatura" },
+            ]
+          : [
+              { value: "all", label: "Todas as faturas" },
+              { value: "none", label: "Sem fatura" },
+              ...[...new Set(data.invoices.map((i) => i.number))].map((n) => ({ value: n, label: n })),
+            ];
+      return (
+        <select
+          key={key}
+          id={id}
+          value={filters[id] ?? "all"}
+          onChange={(e) => setFilters((old) => ({ ...old, [id]: e.target.value }))}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (id === "cte-from" || id === "cte-to")
+      return (
+        <input
+          key={key}
+          type="date"
+          id={id}
+          value={id === "cte-from" ? ctePeriod.from : ctePeriod.to}
+          onChange={(e) => {
+            const value = e.target.value;
+            if (value)
+              setCtePeriod((old) => ({ ...old, [id === "cte-from" ? "from" : "to"]: value }));
+          }}
+        />
+      );
+    if (id === "cte-search")
+      return (
+        <input
+          key={key}
+          id={id}
+          type="search"
+          placeholder="Número, chave, NF ou destinatário"
+          maxLength={80}
+          value={cteSearch}
+          onChange={(e) => setCteSearch(e.target.value)}
+        />
+      );
+    if (id === "cte-count")
+      return (
+        <span key={key} className="filter-meta" id={id}>
+          {cteSource.loading
+            ? "Consultando…"
+            : cteSource.result
+              ? `${cteRecords.length} CT-e(s)${cteSource.result.truncated ? " · mostrando os mais recentes; refine os filtros" : ""}`
+              : ""}
+        </span>
+      );
+    if (["cte-kpi-total", "cte-kpi-linked", "cte-kpi-open", "cte-kpi-alert"].includes(id)) {
+      const value = !cteSource.result && !ctes.length
+        ? "—"
+        : id === "cte-kpi-total"
+          ? cteRecords.length
+          : id === "cte-kpi-linked"
+            ? cteRecords.filter((r) => r.invoice).length
+            : id === "cte-kpi-open"
+              ? cteRecords.filter((r) => !r.invoice).length
+              : "—";
+      return (
+        <div key={key} className="kpi-val" id={id}>
+          {typeof value === "number" ? value.toLocaleString("pt-BR") : value}
+        </div>
+      );
+    }
     if (tag === "select" && (id.endsWith("-carrier") || id.endsWith("-branch") || id === "rule-square")) {
       const entries = id.endsWith("-carrier")
         ? data.carriers.map((c) => ({ id: c.id, name: c.legal_name }))
@@ -474,7 +599,15 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
           <AuditSettings onCarrier={() => setModal("modal-carrier")} />
         </div>
       );
-    if (id === "cte-list") return <CteRows key={key} records={ctes} onSelect={setSelectedCte} />;
+    if (id === "cte-list")
+      return (
+        <CteRows
+          key={key}
+          records={cteRecords}
+          onSelect={setSelectedCte}
+          emptyText={cteEmptyText}
+        />
+      );
     if (cls === "side-foot")
       return (
         <div key={key} className="side-foot">
@@ -519,7 +652,9 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
               <i className="dot" aria-hidden="true" />
               {loading
                 ? "Carregando cadastros…"
-                : "Cadastros no Lovable Cloud · base de CT-es aguardando conexão"}
+                : cteSource.result?.configured
+                  ? "Cadastros no Lovable Cloud · base de CT-es no Databricks (somente leitura)"
+                  : "Cadastros no Lovable Cloud · base de CT-es aguardando conexão"}
               {today && ` · ${today}`}
             </span>
           </div>

@@ -9,10 +9,12 @@
  *   DATABRICKS_WAREHOUSE_ID  ID do SQL Warehouse
  */
 
+/**
+ * Fato silver de CT-es do Broker: já junta resumo, emitente, remetente, destinatário,
+ * tomador, NF-es relacionadas, componentes e quantidades (uma linha por CT-e).
+ */
 export const CTE_SOURCE_TABLES = {
-  resumo: "prd_ancora.`003_broker_nfe_bronze`.cte_resumo",
-  nfes: "prd_ancora.`003_broker_nfe_bronze`.cte_resumo_chaves_nfe_relacionadas",
-  remetente: "prd_ancora.`003_broker_nfe_bronze`.cte_remetente",
+  conhecimentos: "prd_ancora.`106_logistica_silver`.tb_fato_broker_cte_conhecimento_transporte",
 } as const;
 export type CteSourceTable = keyof typeof CTE_SOURCE_TABLES;
 
@@ -136,6 +138,104 @@ export async function describeSourceTable(table: CteSourceTable, config?: Databr
     columns.push({ name, type: row["data_type"] ?? "", comment: row["comment"] ?? "" });
   }
   return columns;
+}
+
+/** Colunas lidas da fato silver para a Auditoria de CT-es. */
+export const CTE_LIST_COLUMNS = [
+  "id_cte",
+  "nr_cte",
+  "nr_chave_acesso_cte",
+  "dt_emissao",
+  "nm_emitente",
+  "nr_cnpj_cpf_emitente",
+  "nm_envolvido",
+  "nm_tomador",
+  "nr_cnpj_cpf_tomador",
+  "nm_remetente",
+  "nr_cnpj_cpf_remetente",
+  "nm_destinatario",
+  "nr_cnpj_cpf_destinatario",
+  "nm_municipio_inicio",
+  "sg_uf_inicio",
+  "nm_municipio_termino",
+  "sg_uf_termino",
+  "cd_cfop",
+  "vl_total_prestacao_servico",
+  "vl_total_carga",
+  "nr_notas_fiscais",
+  "nr_chaves_acesso_notas",
+  "ds_componentes_valor_prestacao",
+  "ds_quantidades_carga",
+] as const;
+
+export type CteListFilters = {
+  /** Emissão inicial (YYYY-MM-DD, horário de Brasília). */
+  from: string;
+  /** Emissão final, inclusiva (YYYY-MM-DD, horário de Brasília). */
+  to: string;
+  search?: string | undefined;
+  carrierCnpj?: string | undefined;
+  branchCnpj?: string | undefined;
+  limit?: number | undefined;
+};
+
+export const CTE_LIST_MAX_ROWS = 500;
+
+/**
+ * Monta a consulta da lista de CT-es. O texto SQL é fixo; filtros entram só como
+ * parâmetros nomeados. Registros apagados na origem (fl_deleted) ficam de fora.
+ */
+export function buildCteListQuery(filters: CteListFilters): {
+  statement: string;
+  params: QueryParam[];
+  limit: number;
+} {
+  const limit = Math.min(Math.max(Math.trunc(filters.limit ?? 200), 1), CTE_LIST_MAX_ROWS);
+  const where = [
+    "NOT fl_deleted",
+    "dt_emissao >= to_utc_timestamp(:from_date, 'America/Sao_Paulo')",
+    "dt_emissao < to_utc_timestamp(date_add(:to_date, 1), 'America/Sao_Paulo')",
+  ];
+  const params: QueryParam[] = [
+    { name: "from_date", value: filters.from, type: "DATE" },
+    { name: "to_date", value: filters.to, type: "DATE" },
+  ];
+  const search = filters.search?.trim();
+  if (search) {
+    where.push(
+      "(nr_chave_acesso_cte = :search OR TRIM(LEADING '0' FROM nr_cte) = TRIM(LEADING '0' FROM :search)" +
+        " OR nr_notas_fiscais LIKE :search_like OR nr_chaves_acesso_notas LIKE :search_like" +
+        " OR upper(nm_destinatario) LIKE upper(:search_like))",
+    );
+    params.push({ name: "search", value: search });
+    params.push({ name: "search_like", value: `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%` });
+  }
+  const carrier = filters.carrierCnpj?.replace(/\D/g, "");
+  if (carrier) {
+    where.push("nr_cnpj_cpf_emitente = :carrier_cnpj");
+    params.push({ name: "carrier_cnpj", value: carrier });
+  }
+  const branch = filters.branchCnpj?.replace(/\D/g, "");
+  if (branch) {
+    where.push(
+      ":branch_cnpj IN (nr_cnpj_cpf_tomador, nr_cnpj_cpf_destinatario, nr_cnpj_cpf_remetente)",
+    );
+    params.push({ name: "branch_cnpj", value: branch });
+  }
+  const statement =
+    `SELECT ${CTE_LIST_COLUMNS.join(", ")} FROM ${CTE_SOURCE_TABLES.conhecimentos}` +
+    ` WHERE ${where.join(" AND ")} ORDER BY dt_emissao DESC, id_cte DESC LIMIT ${limit + 1}`;
+  return { statement, params, limit };
+}
+
+/** Lista de CT-es da origem (até `limit`; `truncated` indica que havia mais). */
+export async function listSourceCtes(filters: CteListFilters, config?: DatabricksConfig) {
+  const { statement, params, limit } = buildCteListQuery(filters);
+  const result = await runDatabricksQuery(statement, params, { config, rowLimit: limit + 1 });
+  return {
+    rows: result.rows.slice(0, limit),
+    truncated: result.truncated || result.rows.length > limit,
+  };
 }
 
 /** Poucas linhas de amostra, com textos longos encurtados. */
