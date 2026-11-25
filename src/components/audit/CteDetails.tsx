@@ -50,6 +50,10 @@ export function CteDetails({ record, onClose }: { record: CteRecord | null; onCl
                     <b>{record.source.sender || "Não informado"}</b>
                   </div>
                   <div>
+                    <span>E-mail do remetente</span>
+                    <b>{record.source.senderEmail || "Não informado no CT-e"}</b>
+                  </div>
+                  <div>
                     <span>Tomador</span>
                     <b>{record.source.payer || "Não informado"}</b>
                   </div>

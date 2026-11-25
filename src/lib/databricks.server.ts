@@ -15,6 +15,10 @@
  */
 export const CTE_SOURCE_TABLES = {
   conhecimentos: "prd_ancora.`106_logistica_silver`.tb_fato_broker_cte_conhecimento_transporte",
+  remetente: "prd_ancora.`003_broker_nfe_bronze`.cte_remetente",
+  destinatario: "prd_ancora.`003_broker_nfe_bronze`.cte_destinatario",
+  nfeCabecalho: "prd_ancora.`003_broker_nfe_bronze`.nfe_cabecalho",
+  nfeTransporte: "prd_ancora.`003_broker_nfe_bronze`.nfe_transporte",
 } as const;
 export type CteSourceTable = keyof typeof CTE_SOURCE_TABLES;
 
@@ -222,9 +226,34 @@ export function buildCteListQuery(filters: CteListFilters): {
     );
     params.push({ name: "branch_cnpj", value: branch });
   }
-  const statement =
-    `SELECT ${CTE_LIST_COLUMNS.join(", ")} FROM ${CTE_SOURCE_TABLES.conhecimentos}` +
-    ` WHERE ${where.join(" AND ")} ORDER BY dt_emissao DESC, id_cte DESC LIMIT ${limit + 1}`;
+  const t = CTE_SOURCE_TABLES;
+  // 1) CT-es do filtro na fato silver; 2) só para eles, dados das tabelas bronze:
+  // e-mail e município do remetente, município do destinatário e peso bruto das NF-es.
+  const statement = [
+    `WITH base AS (SELECT ${CTE_LIST_COLUMNS.join(", ")} FROM ${t.conhecimentos}`,
+    ` WHERE ${where.join(" AND ")} ORDER BY dt_emissao DESC, id_cte DESC LIMIT ${limit + 1}),`,
+    " rem AS (SELECT r.id_cte_cabecalho AS id_cte,",
+    " max_by(nullif(trim(r.email), ''), r.dh_insert) AS email,",
+    " max_by(r.nome_municipio, r.dh_insert) AS municipio, max_by(r.uf, r.dh_insert) AS uf",
+    ` FROM ${t.remetente} r JOIN base b ON r.id_cte_cabecalho = b.id_cte GROUP BY 1),`,
+    " dst AS (SELECT d.id_cte_cabecalho AS id_cte,",
+    " max_by(d.nome_municipio, d.dh_insert) AS municipio, max_by(d.uf, d.dh_insert) AS uf",
+    ` FROM ${t.destinatario} d JOIN base b ON d.id_cte_cabecalho = b.id_cte GROUP BY 1),`,
+    " nfk AS (SELECT DISTINCT id_cte, trim(k) AS chave_nfe FROM base",
+    " LATERAL VIEW explode(split(nr_chaves_acesso_notas, '\\\\|')) x AS k",
+    " WHERE nr_chaves_acesso_notas IS NOT NULL),",
+    " nfp AS (SELECT c.chave_acesso, max(tr.peso_bruto) AS peso_bruto",
+    ` FROM ${t.nfeCabecalho} c JOIN ${t.nfeTransporte} tr ON tr.id_nfe_cabecalho = c.id`,
+    " WHERE c.chave_acesso IN (SELECT chave_nfe FROM nfk) GROUP BY 1),",
+    " nf AS (SELECT k.id_cte, count(*) AS nf_total, count_if(p.peso_bruto > 0) AS nf_com_peso,",
+    " sum(CASE WHEN p.peso_bruto > 0 THEN p.peso_bruto END) AS nf_peso_bruto",
+    " FROM nfk k LEFT JOIN nfp p ON p.chave_acesso = k.chave_nfe GROUP BY 1)",
+    " SELECT b.*, rem.email AS remetente_email, rem.municipio AS remetente_municipio,",
+    " rem.uf AS remetente_uf, dst.municipio AS destinatario_municipio, dst.uf AS destinatario_uf,",
+    " nf.nf_total, nf.nf_com_peso, nf.nf_peso_bruto",
+    " FROM base b LEFT JOIN rem ON rem.id_cte = b.id_cte LEFT JOIN dst ON dst.id_cte = b.id_cte",
+    " LEFT JOIN nf ON nf.id_cte = b.id_cte ORDER BY b.dt_emissao DESC, b.id_cte DESC",
+  ].join("");
   return { statement, params, limit };
 }
 
