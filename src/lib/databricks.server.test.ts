@@ -89,6 +89,8 @@ describe("Databricks — leitura da base de CT-es", () => {
     expect(limit).toBe(500);
     expect(statement).toContain("106_logistica_silver`.tb_fato_broker_cte_conhecimento_transporte");
     expect(statement).toContain("NOT fl_deleted");
+    expect(statement).toContain("substr(nr_cnpj_cpf_tomador, 1, 8) IN (SELECT DISTINCT");
+    expect(statement).toContain("FROM prd_ancora.`003_broker_nfe_bronze`.cds_ancora");
     expect(statement).toContain("LIMIT 501");
     expect(statement).not.toContain("1=1");
     expect(statement).not.toContain("2026-11-01");

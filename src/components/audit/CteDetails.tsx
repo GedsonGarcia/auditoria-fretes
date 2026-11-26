@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FileText, Scale, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -182,20 +183,53 @@ export function CteRows({
               <strong>{record.number}</strong>
               <small className="cte-key">{record.key}</small>
             </td>
-            <td>{record.carrier}</td>
-            <td>{record.branch}</td>
-            <td>{record.recipient}</td>
             <td>{formatFreight(record.merchandise)}</td>
-            <td>{record.weight}</td>
-            <td>{record.volumes}</td>
-            <td>{record.invoices}</td>
             <td>{formatFreight(record.freight)}</td>
             <td>{formatFreight(record.audited)}</td>
             <td>{record.invoice || "Sem fatura"}</td>
             <td>{record.status}</td>
+            <td>{record.carrier}</td>
+            <td>{record.branch}</td>
+            <td>{record.recipient}</td>
+            <td>{record.weight}</td>
+            <td>{record.volumes}</td>
+            <td className="cte-nf-cell">
+              <InvoiceNumbers value={record.invoices} />
+            </td>
           </tr>
         ))
       )}
     </tbody>
+  );
+}
+
+/** Quantas NF-es a coluna mostra antes do botão "Mostrar mais". */
+export const NF_PREVIEW_LIMIT = 6;
+
+/** Números das NF-es do CT-e: mostra até 6 e expande sob demanda, sem abrir o detalhe. */
+export function InvoiceNumbers({ value }: { value: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const numbers = value
+    .split(",")
+    .map((n) => n.trim())
+    .filter(Boolean);
+  if (numbers.length <= NF_PREVIEW_LIMIT) return <span className="cte-nf-list">{value}</span>;
+  const shown = expanded ? numbers : numbers.slice(0, NF_PREVIEW_LIMIT);
+  return (
+    <>
+      <span className="cte-nf-list">{shown.join(", ")}</span>
+      <button
+        type="button"
+        className="cte-nf-more"
+        aria-expanded={expanded}
+        onClick={(event) => {
+          event.stopPropagation();
+          setExpanded((open) => !open);
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        {expanded ? "Mostrar menos" : `Mostrar mais (+${numbers.length - NF_PREVIEW_LIMIT})`}
+      </button>
+    </>
   );
 }

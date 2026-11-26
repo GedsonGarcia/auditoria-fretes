@@ -4097,3 +4097,33 @@ body:has(.theme-dark) {
   max-width: 260px;
   overflow-wrap: anywhere;
 }
+
+/* Relação de CT-es: rolagem no topo e coluna de NF-es compacta */
+.table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+}
+.table-scroll-top > div {
+  height: 1px;
+}
+.cte-nf-cell {
+  min-width: 160px;
+  max-width: 220px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.cte-nf-list {
+  display: block;
+}
+.cte-nf-more {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue, #003a5d);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

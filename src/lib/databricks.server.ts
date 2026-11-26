@@ -19,6 +19,8 @@ export const CTE_SOURCE_TABLES = {
   destinatario: "prd_ancora.`003_broker_nfe_bronze`.cte_destinatario",
   nfeCabecalho: "prd_ancora.`003_broker_nfe_bronze`.nfe_cabecalho",
   nfeTransporte: "prd_ancora.`003_broker_nfe_bronze`.nfe_transporte",
+  /** Lista oficial de CDs da Rede ANCORA no Broker: define quem é tomador auditado. */
+  cdsAncora: "prd_ancora.`003_broker_nfe_bronze`.cds_ancora",
 } as const;
 export type CteSourceTable = keyof typeof CTE_SOURCE_TABLES;
 
@@ -259,8 +261,13 @@ export function buildCteListQuery(filters: CteListFilters): {
   limit: number;
 } {
   const limit = Math.min(Math.max(Math.trunc(filters.limit ?? 200), 1), CTE_LIST_MAX_ROWS);
+  const t = CTE_SOURCE_TABLES;
   const where = [
     "NOT fl_deleted",
+    // Só CT-es com a Rede ANCORA como tomadora do frete: raiz do CNPJ do tomador
+    // igual à de um CD da lista oficial (cobre as filiais de cada empresa).
+    "substr(nr_cnpj_cpf_tomador, 1, 8) IN (SELECT DISTINCT substr(regexp_replace(cnpj, '[^0-9]', ''), 1, 8)" +
+      ` FROM ${t.cdsAncora} WHERE cnpj IS NOT NULL)`,
     "dt_emissao >= to_utc_timestamp(:from_date, 'America/Sao_Paulo')",
     "dt_emissao < to_utc_timestamp(date_add(:to_date, 1), 'America/Sao_Paulo')",
   ];
@@ -290,7 +297,6 @@ export function buildCteListQuery(filters: CteListFilters): {
     );
     params.push({ name: "branch_cnpj", value: branch });
   }
-  const t = CTE_SOURCE_TABLES;
   // 1) CT-es do filtro na fato silver; 2) só para eles, dados das tabelas bronze:
   // e-mail e município do remetente, município do destinatário e peso bruto das NF-es.
   const statement = [

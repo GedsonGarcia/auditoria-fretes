@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
+import { DualScroll } from "./DualScroll";
 import type { CteRecord } from "./cte-detail-data";
 import {
   defaultCtePeriod,
@@ -637,6 +638,12 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
         <div key={key} className="content">
           <AuditSettings onCarrier={() => setModal("modal-carrier")} />
         </div>
+      );
+    if (id === "cte-table-wrap")
+      return (
+        <DualScroll key={key} className={cls}>
+          {children.map((c, i) => render(c, `${key}-${i}`))}
+        </DualScroll>
       );
     if (id === "cte-list")
       return (

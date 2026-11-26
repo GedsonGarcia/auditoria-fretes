@@ -53,6 +53,38 @@ describe("Auditoria de CT-es com dados da base original", () => {
     expect(onSelect).toHaveBeenCalledWith(record);
   });
 
+  it("coloca valores, fatura e alertas antes das demais colunas", () => {
+    render(
+      <table>
+        <CteRows records={[record]} onSelect={() => {}} />
+      </table>,
+    );
+    const cells = screen.getByRole("row", { name: "Detalhar CT-e 123" }).querySelectorAll("td");
+    expect(cells[2]).toHaveTextContent("R$ 8.543,06");
+    expect(cells[3]).toHaveTextContent("R$ 696,25");
+    expect(cells[5]).toHaveTextContent("Sem fatura");
+    expect(cells[7]).toHaveTextContent("TRANSPORTADORA EXEMPLO");
+    expect(cells[12]).toHaveTextContent("143930");
+  });
+
+  it("mostra até 6 NF-es e expande sem abrir o detalhe do CT-e", () => {
+    const onSelect = vi.fn();
+    const many = { ...record, invoices: "1, 2, 3, 4, 5, 6, 7, 8" };
+    render(
+      <table>
+        <CteRows records={[many]} onSelect={onSelect} />
+      </table>,
+    );
+    const row = screen.getByRole("row", { name: "Detalhar CT-e 123" });
+    expect(row).toHaveTextContent("1, 2, 3, 4, 5, 6");
+    expect(row).not.toHaveTextContent("6, 7");
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar mais (+2)" }));
+    expect(row).toHaveTextContent("1, 2, 3, 4, 5, 6, 7, 8");
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar menos" }));
+    expect(row).not.toHaveTextContent("6, 7");
+  });
+
   it("detalha origem, destino e partes sem decompor o que a origem não traz", () => {
     render(<CteDetails record={record} onClose={() => {}} />);
     expect(screen.getByText("SAO PAULO / SP → SAO JOSE DOS PINHAIS / PR")).toBeInTheDocument();

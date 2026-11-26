@@ -29,6 +29,7 @@ const labels = {
   destinatario: "Destinatário do CT-e (município)",
   nfeCabecalho: "NF-e (chave de acesso)",
   nfeTransporte: "Transporte da NF-e (peso bruto)",
+  cdsAncora: "CDs da Rede ANCORA (tomadores auditados)",
 } as const;
 
 /**
