@@ -6,12 +6,13 @@
  * 1. Peso considerado (real ou taxado = maior entre real e cubado)
  * 2. Frete base = composição de Frete Peso e Frete Valor
  * 3. Frete mínimo (piso sobre o frete base ou sobre o total)
- * 4. Taxas (GRIS, Ad Valorem, Pedágio, Despacho, TDE, TDA, TAC…)
- * 5. ICMS (já incluso na tabela ou somado "por dentro")
+ * 4. Taxas (GRIS, Ad Valorem, Pedágio, Despacho, TDE, TDA…)
+ * 5. Adicional de frete (TAC): % sobre o frete sem imposto (itens 2 a 4) ou R$ fixo
+ * 6. ICMS (já incluso na tabela ou somado "por dentro"), sobre o frete já com a TAC
  */
 
 export type CalcType = "faixa_peso" | "por_kg" | "por_100kg" | "percentual" | "fixo";
-export type PercentBase = "nf" | "frete_peso" | "frete_base";
+export type PercentBase = "nf" | "frete_peso" | "frete_base" | "frete_sem_imposto";
 export type Applies = "sempre" | "condicional";
 export type RuleMode = "padrao" | "personalizado";
 
@@ -79,7 +80,8 @@ export const TAC_FIXED_FIELD = "ADICIONAL DE FRETE - TAC (R$)";
 export function fieldUnit(field: string) {
   if (field === "FRETE PESO (GATILHO)") return "R$/kg — excedente acima da última faixa de peso";
   if (field === "FATOR DE CUBAGEM") return "kg por m³ (ex.: 300)";
-  if (field === TAC_PERCENT_FIELD) return "% sobre o frete base (peso + valor) (ex.: 5 para 5%)";
+  if (field === TAC_PERCENT_FIELD)
+    return "% sobre o frete sem imposto (frete + taxas) (ex.: 2 para 2%)";
   if (field === TAC_FIXED_FIELD) return "R$ por CT-e";
   if (field.includes("R$/100KG") || field === "PEDÁGIO") return "R$ por fração de 100 kg";
   if (field.includes("%") || ["TRT"].includes(field)) return "% (ex.: 0,30 para 0,30%)";
@@ -107,6 +109,7 @@ export const baseLabels: Record<PercentBase, string> = {
   nf: "valor da NF",
   frete_peso: "Frete Peso",
   frete_base: "frete base (peso + valor)",
+  frete_sem_imposto: "frete sem imposto (frete + taxas)",
 };
 export const appliesLabels: Record<Applies, string> = {
   sempre: "Sempre",
@@ -175,11 +178,11 @@ export const DEFAULT_RULES: FeeRule[] = [
     applies: "condicional",
   }),
   rule("tac", "TAC — adicional de frete", "percentual", TAC_PERCENT_FIELD, {
-    base: "frete_base",
+    base: "frete_sem_imposto",
     altType: "fixo",
     altRate: TAC_FIXED_FIELD,
     optional: true,
-    note: "Taxa emergencial ou temporária. Preencha em % (sobre o frete base) ou em R$ por CT-e; vazia, não é cobrada.",
+    note: "Taxa emergencial ou temporária, calculada por último: em %, sobre o frete sem imposto (frete + taxas); em R$, valor fixo por CT-e. O ICMS incide sobre o frete já com a TAC. Vazia, não é cobrada.",
   }),
 ];
 
@@ -268,6 +271,15 @@ export type SimulationResult = {
   total: number;
 };
 
+type FeeContext = {
+  nf: number;
+  peso: number;
+  fretePeso: number;
+  freteBase: number;
+  freteSemImposto: number;
+  bands: WeightBand[];
+};
+
 function bandFreight(peso: number, bands: WeightBand[], excedente: number | null) {
   const list = bands
     .map((b) => ({ weight: Number(b.weight), value: Number(b.value) }))
@@ -285,7 +297,7 @@ function term(
   base: PercentBase,
   field: string,
   values: CommercialValues,
-  ctx: { nf: number; peso: number; fretePeso: number; freteBase: number; bands: WeightBand[] },
+  ctx: FeeContext,
 ) {
   const v = readValue(values, field);
   switch (type) {
@@ -298,17 +310,18 @@ function term(
     case "fixo":
       return v ?? 0;
     case "percentual": {
-      const amount = base === "nf" ? ctx.nf : base === "frete_peso" ? ctx.fretePeso : ctx.freteBase;
+      const amount = {
+        nf: ctx.nf,
+        frete_peso: ctx.fretePeso,
+        frete_base: ctx.freteBase,
+        frete_sem_imposto: ctx.freteSemImposto,
+      }[base];
       return ((v ?? 0) / 100) * amount;
     }
   }
 }
 
-function applyRule(
-  r: FeeRule,
-  values: CommercialValues,
-  ctx: { nf: number; peso: number; fretePeso: number; freteBase: number; bands: WeightBand[] },
-) {
+function applyRule(r: FeeRule, values: CommercialValues, ctx: FeeContext) {
   let value = term(r.type, r.base, r.rate, values, ctx);
   if (r.altType) value = Math.max(value, term(r.altType, r.altBase, r.altRate, values, ctx));
   const min = r.minimum ? readValue(values, r.minimum) : null;
@@ -330,7 +343,14 @@ export function simulate(
   const pesoCubado = round2(input.m3 * fator);
   const pesoConsiderado =
     config.peso === "taxado" ? Math.max(input.pesoReal, pesoCubado) : input.pesoReal;
-  const ctx = { nf: input.nf, peso: pesoConsiderado, fretePeso: 0, freteBase: 0, bands };
+  const ctx: FeeContext = {
+    nf: input.nf,
+    peso: pesoConsiderado,
+    fretePeso: 0,
+    freteBase: 0,
+    freteSemImposto: 0,
+    bands,
+  };
   const byKey = (key: string) => rules.find((r) => r.key === key);
   const pesoRule = byKey("frete_peso");
   const valorRule = byKey("frete_valor");
@@ -356,19 +376,29 @@ export function simulate(
   ctx.freteBase = round2(freteBase);
 
   const lines: SimulationLine[] = [];
-  for (const r of rules) {
-    if (r.key === "frete_peso" || r.key === "frete_valor") continue;
-    if (isNotApplicable(r, values)) continue;
-    if (r.applies === "condicional" && !input.condicionais) continue;
-    const value = applyRule(r, values, ctx);
-    if (value > 0)
-      lines.push({ key: r.key, label: r.label, value, detail: describeRule(r, values) });
-  }
-  let subtotal = round2(ctx.freteBase + lines.reduce((sum, l) => sum + l.value, 0));
+  const charge = (list: FeeRule[]) => {
+    const added: SimulationLine[] = [];
+    for (const r of list) {
+      if (isNotApplicable(r, values)) continue;
+      if (r.applies === "condicional" && !input.condicionais) continue;
+      const value = applyRule(r, values, ctx);
+      if (value > 0)
+        added.push({ key: r.key, label: r.label, value, detail: describeRule(r, values) });
+    }
+    lines.push(...added);
+    return added.reduce((sum, l) => sum + l.value, 0);
+  };
+  const fees = rules.filter((r) => r.key !== "frete_peso" && r.key !== "frete_valor");
+  // Taxas sobre o frete sem imposto (TAC) entram por último, depois do frete mínimo.
+  const onTotal = (r: FeeRule) =>
+    r.base === "frete_sem_imposto" || (Boolean(r.altType) && r.altBase === "frete_sem_imposto");
+  let subtotal = round2(ctx.freteBase + charge(fees.filter((r) => !onTotal(r))));
   if (config.minimoSobre === "total" && minimo !== null && subtotal < minimo) {
     subtotal = minimo;
     minimoAplicado = true;
   }
+  ctx.freteSemImposto = subtotal;
+  subtotal = round2(subtotal + charge(fees.filter(onTotal)));
   const icms =
     config.icms === "por_dentro" && input.aliquotaIcms > 0 && input.aliquotaIcms < 100
       ? round2(subtotal / (1 - input.aliquotaIcms / 100) - subtotal)

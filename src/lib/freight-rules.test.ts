@@ -82,14 +82,44 @@ describe("TAC — adicional de frete", () => {
   const run = (extra: CommercialValues) =>
     simulate(input, { ...values, ...extra }, bands, DEFAULT_RULES, DEFAULT_CONFIG);
 
-  it("em %, cobra sobre o frete base e soma ao total", () => {
-    // frete base 145 × 10% = 14,50 → 196 + 14,50
+  it("em %, cobra sobre o frete sem imposto (frete + taxas)", () => {
+    // frete sem imposto 196 × 10% = 19,60 → 215,60
     const r = run({
       [TAC_PERCENT_FIELD]: { value: "10", na: false },
       [TAC_FIXED_FIELD]: { value: "", na: true },
     });
-    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(14.5);
-    expect(r.total).toBe(210.5);
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(19.6);
+    expect(r.total).toBe(215.6);
+  });
+
+  // Exemplos da área de transporte: frete sem imposto R$ 40,00 e ICMS por dentro de 12%.
+  const flat = (tac: CommercialValues) =>
+    simulate(
+      { nf: 1000, pesoReal: 10, m3: 0, condicionais: false, aliquotaIcms: 12 },
+      { "FRETE MÍNIMO": { value: "40", na: false }, ...tac },
+      [],
+      DEFAULT_RULES,
+      { ...DEFAULT_CONFIG, icms: "por_dentro" },
+    );
+
+  it("TAC de 2% sobre R$ 40,00 = R$ 0,80; o ICMS incide sobre R$ 40,80", () => {
+    const r = flat({
+      [TAC_PERCENT_FIELD]: { value: "2", na: false },
+      [TAC_FIXED_FIELD]: { value: "", na: true },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(0.8);
+    expect(r.subtotal).toBe(40.8);
+    expect(r.icms).toBe(5.56); // 40,80 / 0,88 − 40,80
+    expect(r.total).toBe(46.36);
+  });
+
+  it("TAC de R$ 10,00 sobre R$ 40,00; o ICMS incide sobre R$ 50,00", () => {
+    const r = flat({
+      [TAC_PERCENT_FIELD]: { value: "", na: true },
+      [TAC_FIXED_FIELD]: { value: "10", na: false },
+    });
+    expect(r.subtotal).toBe(50);
+    expect(r.icms).toBe(6.82); // 50 / 0,88 − 50
   });
 
   it("em R$, cobra o valor fixo por CT-e", () => {

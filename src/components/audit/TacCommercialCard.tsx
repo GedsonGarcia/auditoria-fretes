@@ -80,15 +80,15 @@ export function TacCommercialCard({
           type="number"
           min="0"
           step="0.0001"
-          placeholder={unit === "fixed" ? "R$ por CT-e" : "% do frete"}
+          placeholder={unit === "fixed" ? "R$ por CT-e" : "% do frete sem imposto"}
           disabled={na}
           value={na ? "" : (item?.value ?? "")}
           onChange={(e) => setValue(e.target.value)}
         />
       </div>
       <div className="comm-unit">
-        {fieldUnit(active)}. Taxa emergencial ou temporária: crie uma nova versão da tabela com a
-        vigência do adicional.
+        {fieldUnit(active)}. O ICMS é calculado sobre o frete já com a TAC. Taxa emergencial ou
+        temporária: crie uma nova versão da tabela com a vigência do adicional.
       </div>
     </div>
   );
