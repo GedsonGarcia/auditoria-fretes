@@ -42,6 +42,7 @@ const COMPONENT_ALIASES: Record<string, string[]> = {
   trt: ["TRT"],
   emex: ["EMEX"],
   trf: ["TRF"],
+  tac: ["TAC", "ADICIONAL DE FRETE", "ADICIONAL FRETE", "TAXA ADICIONAL"],
 };
 const aliasKey = (name: string) => {
   const n = normalizeLocality(name).toUpperCase();

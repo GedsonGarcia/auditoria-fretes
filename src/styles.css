@@ -4127,3 +4127,10 @@ body:has(.theme-dark) {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Adicional de frete (TAC): forma de cobrança (% ou R$) ao lado do valor. */
+.comm-tac-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 6px;
+}

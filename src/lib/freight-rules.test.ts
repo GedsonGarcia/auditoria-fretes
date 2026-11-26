@@ -3,6 +3,9 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_RULES,
   describeRule,
+  missingFields,
+  TAC_FIXED_FIELD,
+  TAC_PERCENT_FIELD,
   simulate,
   type CommercialValues,
 } from "./freight-rules";
@@ -70,5 +73,44 @@ describe("describeRule", () => {
     expect(describeRule(gris, values).replace(/\u00a0/g, " ")).toBe(
       "Maior entre 0,3% × valor da NF e R$ 5,00",
     );
+  });
+});
+
+describe("TAC — adicional de frete", () => {
+  const input = { nf: 10000, pesoReal: 120, m3: 0.5, condicionais: false, aliquotaIcms: 0 };
+  const tac = DEFAULT_RULES.find((r) => r.key === "tac")!;
+  const run = (extra: CommercialValues) =>
+    simulate(input, { ...values, ...extra }, bands, DEFAULT_RULES, DEFAULT_CONFIG);
+
+  it("em %, cobra sobre o frete base e soma ao total", () => {
+    // frete base 145 × 10% = 14,50 → 196 + 14,50
+    const r = run({
+      [TAC_PERCENT_FIELD]: { value: "10", na: false },
+      [TAC_FIXED_FIELD]: { value: "", na: true },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(14.5);
+    expect(r.total).toBe(210.5);
+  });
+
+  it("em R$, cobra o valor fixo por CT-e", () => {
+    const r = run({
+      [TAC_PERCENT_FIELD]: { value: "", na: true },
+      [TAC_FIXED_FIELD]: { value: "25", na: false },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(25);
+    expect(r.total).toBe(221);
+    expect(
+      describeRule(tac, {
+        [TAC_PERCENT_FIELD]: { value: "", na: true },
+        [TAC_FIXED_FIELD]: { value: "25", na: false },
+      }).replace(/ /g, " "),
+    ).toBe("R$ 25,00 por CT-e");
+  });
+
+  it("vazia ou em tabelas antigas, não cobra e não aparece como faltando", () => {
+    const r = run({});
+    expect(r.lines.find((l) => l.key === "tac")).toBeUndefined();
+    expect(r.total).toBe(196);
+    expect(missingFields(tac, values)).toEqual([]);
   });
 });

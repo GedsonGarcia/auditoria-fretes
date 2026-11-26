@@ -6,7 +6,7 @@
  * 1. Peso considerado (real ou taxado = maior entre real e cubado)
  * 2. Frete base = composição de Frete Peso e Frete Valor
  * 3. Frete mínimo (piso sobre o frete base ou sobre o total)
- * 4. Taxas (GRIS, Ad Valorem, Pedágio, Despacho, TDE, TDA…)
+ * 4. Taxas (GRIS, Ad Valorem, Pedágio, Despacho, TDE, TDA, TAC…)
  * 5. ICMS (já incluso na tabela ou somado "por dentro")
  */
 
@@ -29,6 +29,8 @@ export type FeeRule = {
   maximum: string;
   applies: Applies;
   note: string;
+  /** Taxa opcional: sem valor preenchido, simplesmente não é cobrada (não fica "faltando"). */
+  optional?: boolean;
 };
 
 export type FreightConfig = {
@@ -65,12 +67,20 @@ export const COMMERCIAL_FIELDS = [
   "EMEX MÍNIMO",
   "TRF (%)",
   "TRF (R$)",
+  "ADICIONAL DE FRETE - TAC (%)",
+  "ADICIONAL DE FRETE - TAC (R$)",
 ];
+
+/** Adicional de frete (TAC): taxa emergencial ou temporária, em % ou em R$ por CT-e. */
+export const TAC_PERCENT_FIELD = "ADICIONAL DE FRETE - TAC (%)";
+export const TAC_FIXED_FIELD = "ADICIONAL DE FRETE - TAC (R$)";
 
 /** Unidade esperada de cada campo, mostrada na aba 1. */
 export function fieldUnit(field: string) {
   if (field === "FRETE PESO (GATILHO)") return "R$/kg — excedente acima da última faixa de peso";
   if (field === "FATOR DE CUBAGEM") return "kg por m³ (ex.: 300)";
+  if (field === TAC_PERCENT_FIELD) return "% sobre o frete base (peso + valor) (ex.: 5 para 5%)";
+  if (field === TAC_FIXED_FIELD) return "R$ por CT-e";
   if (field.includes("R$/100KG") || field === "PEDÁGIO") return "R$ por fração de 100 kg";
   if (field.includes("%") || ["TRT"].includes(field)) return "% (ex.: 0,30 para 0,30%)";
   return "R$ por CT-e";
@@ -164,6 +174,13 @@ export const DEFAULT_RULES: FeeRule[] = [
     altRate: "TRF (R$)",
     applies: "condicional",
   }),
+  rule("tac", "TAC — adicional de frete", "percentual", TAC_PERCENT_FIELD, {
+    base: "frete_base",
+    altType: "fixo",
+    altRate: TAC_FIXED_FIELD,
+    optional: true,
+    note: "Taxa emergencial ou temporária. Preencha em % (sobre o frete base) ou em R$ por CT-e; vazia, não é cobrada.",
+  }),
 ];
 
 export const defaultRule = (key: string) => DEFAULT_RULES.find((r) => r.key === key);
@@ -200,10 +217,18 @@ function termText(type: CalcType, base: PercentBase, field: string, values: Comm
 /** Texto claro da regra, com os valores da tabela comercial. */
 export function describeRule(r: FeeRule, values: CommercialValues): string {
   const main = termText(r.type, r.base, r.rate, values);
-  const terms = r.altType ? [main, termText(r.altType, r.altBase, r.altRate, values)] : [main];
+  const alt = r.altType ? termText(r.altType, r.altBase, r.altRate, values) : "";
+  // Um dos dois termos marcado como não aplicável vale zero: descreve só o outro.
+  const terms = !alt
+    ? [main]
+    : values[r.altRate]?.na
+      ? [main]
+      : values[r.rate]?.na
+        ? [alt]
+        : [main, alt];
   const min = r.minimum ? readValue(values, r.minimum) : null;
   if (r.minimum) terms.push(min === null ? `[${r.minimum}]` : brl(min));
-  let text = terms.length > 1 ? `Maior entre ${terms.join(" e ")}` : main;
+  let text = terms.length > 1 ? `Maior entre ${terms.join(" e ")}` : terms[0]!;
   text = text.charAt(0).toUpperCase() + text.slice(1);
   const max = Number(r.maximum);
   if (r.maximum && Number.isFinite(max) && max > 0) text += `, limitado a ${brl(max)}`;
@@ -212,6 +237,7 @@ export function describeRule(r: FeeRule, values: CommercialValues): string {
 
 /** Campos da tabela comercial que a regra usa e que não foram preenchidos. */
 export function missingFields(r: FeeRule, values: CommercialValues): string[] {
+  if (r.optional) return [];
   return [r.rate, r.altType ? r.altRate : "", r.minimum]
     .filter(Boolean)
     .filter((f) => values[f]?.na !== true && readValue(values, f) === null);
