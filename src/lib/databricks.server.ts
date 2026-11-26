@@ -266,8 +266,7 @@ export function buildCteListQuery(filters: CteListFilters): {
     "NOT fl_deleted",
     // Só CT-es com a Rede ANCORA como tomadora do frete: raiz do CNPJ do tomador
     // igual à de um CD da lista oficial (cobre as filiais de cada empresa).
-    "substr(nr_cnpj_cpf_tomador, 1, 8) IN (SELECT DISTINCT substr(regexp_replace(cnpj, '[^0-9]', ''), 1, 8)" +
-      ` FROM ${t.cdsAncora} WHERE cnpj IS NOT NULL)`,
+    "substr(nr_cnpj_cpf_tomador, 1, 8) IN (SELECT raiz FROM anc)",
     "dt_emissao >= to_utc_timestamp(:from_date, 'America/Sao_Paulo')",
     "dt_emissao < to_utc_timestamp(date_add(:to_date, 1), 'America/Sao_Paulo')",
   ];
@@ -300,7 +299,9 @@ export function buildCteListQuery(filters: CteListFilters): {
   // 1) CT-es do filtro na fato silver; 2) só para eles, dados das tabelas bronze:
   // e-mail e município do remetente, município do destinatário e peso bruto das NF-es.
   const statement = [
-    `WITH base AS (SELECT ${CTE_LIST_COLUMNS.join(", ")} FROM ${t.conhecimentos}`,
+    "WITH anc AS (SELECT DISTINCT substr(regexp_replace(cnpj, '[^0-9]', ''), 1, 8) AS raiz",
+    ` FROM ${t.cdsAncora} WHERE cnpj IS NOT NULL),`,
+    ` base AS (SELECT ${CTE_LIST_COLUMNS.join(", ")} FROM ${t.conhecimentos}`,
     ` WHERE ${where.join(" AND ")} ORDER BY dt_emissao DESC, id_cte DESC LIMIT ${limit + 1}),`,
     " rem AS (SELECT r.id_cte_cabecalho AS id_cte,",
     " max_by(nullif(trim(r.email), ''), r.dh_insert) AS email,",
@@ -313,14 +314,19 @@ export function buildCteListQuery(filters: CteListFilters): {
     " LATERAL VIEW explode(split(nr_chaves_acesso_notas, '\\\\|')) x AS k",
     " WHERE nr_chaves_acesso_notas IS NOT NULL),",
     " nfp AS (SELECT c.chave_acesso, max(tr.peso_bruto) AS peso_bruto",
-    ` FROM ${t.nfeCabecalho} c JOIN ${t.nfeTransporte} tr ON tr.id_nfe_cabecalho = c.id`,
+    ` FROM ${t.nfeCabecalho} c LEFT JOIN ${t.nfeTransporte} tr ON tr.id_nfe_cabecalho = c.id`,
     " WHERE c.chave_acesso IN (SELECT chave_nfe FROM nfk) GROUP BY 1),",
     " nf AS (SELECT k.id_cte, count(*) AS nf_total, count_if(p.peso_bruto > 0) AS nf_com_peso,",
-    " sum(CASE WHEN p.peso_bruto > 0 THEN p.peso_bruto END) AS nf_peso_bruto",
+    " sum(CASE WHEN p.peso_bruto > 0 THEN p.peso_bruto END) AS nf_peso_bruto,",
+    // NF-es fora da base do Broker (que só recebe notas de entrada); entre elas, as
+    // emitidas pela própria Rede ANCORA (raiz do CNPJ do emitente, posições 7–14 da chave).
+    " count_if(p.chave_acesso IS NULL) AS nf_fora_base,",
+    " count_if(p.chave_acesso IS NULL AND substr(k.chave_nfe, 7, 8) IN (SELECT raiz FROM anc))",
+    " AS nf_fora_base_ancora",
     " FROM nfk k LEFT JOIN nfp p ON p.chave_acesso = k.chave_nfe GROUP BY 1)",
     " SELECT b.*, rem.email AS remetente_email, rem.municipio AS remetente_municipio,",
     " rem.uf AS remetente_uf, dst.municipio AS destinatario_municipio, dst.uf AS destinatario_uf,",
-    " nf.nf_total, nf.nf_com_peso, nf.nf_peso_bruto",
+    " nf.nf_total, nf.nf_com_peso, nf.nf_peso_bruto, nf.nf_fora_base, nf.nf_fora_base_ancora",
     " FROM base b LEFT JOIN rem ON rem.id_cte = b.id_cte LEFT JOIN dst ON dst.id_cte = b.id_cte",
     " LEFT JOIN nf ON nf.id_cte = b.id_cte ORDER BY b.dt_emissao DESC, b.id_cte DESC",
   ].join("");

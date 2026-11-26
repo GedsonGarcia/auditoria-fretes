@@ -52,7 +52,13 @@ export interface CteSourceDetails {
   realWeightKg?: number | null;
   realWeightSource?: "cte" | "nfe" | null;
   cubicMeters?: number | null;
-  nfWeight?: { total: number; withWeight: number; grossKg: number | null } | null;
+  nfWeight?: {
+    total: number;
+    withWeight: number;
+    grossKg: number | null;
+    outsideBase?: number;
+    outsideBaseAncora?: number;
+  } | null;
 }
 
 /** Resultado da auditoria automática de um CT-e. */
