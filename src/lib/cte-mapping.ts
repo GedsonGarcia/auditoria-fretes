@@ -89,7 +89,15 @@ function formatCteWeight(quantities: Quantity[]): string | null {
 }
 
 /** Peso das NF-es do CT-e (peso bruto da NF-e, tabela nfe_transporte). */
-export type NfWeight = { total: number; withWeight: number; grossKg: number | null };
+export type NfWeight = {
+  total: number;
+  withWeight: number;
+  grossKg: number | null;
+  /** NF-es que não estão na base de NF-e do Broker. */
+  outsideBase?: number;
+  /** Delas, as emitidas pela própria Rede ANCORA (o Broker só recebe notas de entrada). */
+  outsideBaseAncora?: number;
+};
 
 function readNfWeight(row: SilverCteRow): NfWeight | null {
   const total = parseSourceDecimal(row["nf_total"]);
@@ -98,6 +106,8 @@ function readNfWeight(row: SilverCteRow): NfWeight | null {
     total,
     withWeight: parseSourceDecimal(row["nf_com_peso"]) ?? 0,
     grossKg: parseSourceDecimal(row["nf_peso_bruto"]),
+    outsideBase: parseSourceDecimal(row["nf_fora_base"]) ?? 0,
+    outsideBaseAncora: parseSourceDecimal(row["nf_fora_base_ancora"]) ?? 0,
   };
 }
 
@@ -116,10 +126,30 @@ export function resolveRealWeight(
   return null;
 }
 
+/**
+ * Peso mostrado na lista: só o peso exato (soma de todas as NF-es). Se faltar o peso
+ * de alguma NF-e, nenhum número é exibido, para não parecer um peso válido.
+ */
 function formatNfWeight(nf: NfWeight | null): string {
-  if (!nf || !nf.withWeight || nf.grossKg === null) return NOT_INFORMED;
-  if (nf.withWeight === nf.total) return `${numberBr(nf.grossKg, 2)} (NF-e)`;
-  return `Parcial: ${numberBr(nf.grossKg, 2)} em ${nf.withWeight} de ${nf.total} NF-es`;
+  if (!nf) return NOT_INFORMED;
+  if (nf.withWeight === nf.total && (nf.grossKg ?? 0) > 0)
+    return `${numberBr(nf.grossKg!, 2)} (NF-e)`;
+  return `Sem peso em ${nf.total - nf.withWeight} de ${nf.total} NF-e(s)`;
+}
+
+/** Por que não há peso exato: quantas NF-es estão sem peso e o motivo conhecido. */
+export function describeWeightGap(nf: NfWeight | null | undefined): string {
+  if (!nf) return "o CT-e não traz o peso nem a relação de NF-es";
+  const missing = nf.total - nf.withWeight;
+  const parts = [`${missing} de ${nf.total} NF-e(s) sem peso`];
+  const ancora = nf.outsideBaseAncora ?? 0;
+  const other = (nf.outsideBase ?? 0) - ancora;
+  const zero = missing - (nf.outsideBase ?? 0);
+  if (ancora > 0)
+    parts.push(`${ancora} emitida(s) pela Rede ANCORA, fora da base de NF-e do Broker`);
+  if (other > 0) parts.push(`${other} fora da base de NF-e do Broker`);
+  if (zero > 0) parts.push(`${zero} sem peso bruto na própria NF-e`);
+  return `peso indisponível: o CT-e não traz o peso real e ${parts.join("; ")}`;
 }
 
 /** "2 - SAO - SAO PAULO" → "SAO PAULO" (prefixos de rota que algumas transportadoras usam). */

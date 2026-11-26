@@ -9,6 +9,7 @@
 - [x] Atualizar apresentação conforme a referência enviada e validar navegação, formulários, recolhimento do menu e tamanhos de tela; sete testes aprovados e nenhuma falha observada no navegador.
 - [x] Consultar CT-es reais — fato silver do Broker no Databricks, só CT-es com a Rede ANCORA tomadora (raiz do CNPJ em `003_broker_nfe_bronze.cds_ancora`).
 - [ ] DACTE em PDF — o Databricks não guarda XML nem PDF de CT-e (`documento_distribuicao_cte_dfe` só tem NSU e metadados). Aguarda o time de dados ingerir o XML (docZip da distribuição DF-e) ou indicar a origem do arquivo no Broker; o app gera ou abre o DACTE a partir daí.
+- [ ] Peso exato de todos os CT-es — o peso real do CT-e não chega (cte_informacoes_quantidades_carga sem linhas para CT-es recentes) e o Broker só tem NF-es de entrada. NF-es emitidas pela Rede ANCORA (vendas e transferências) precisam de outra fonte com peso bruto: Benner (`001_benner_bronze.fn_documentos.PESOBRUTO` via `fn_documentonfe.CHAVE`) ou OMS (`007_oms_bronze.nfes.xml`); aguarda acesso de leitura.
 
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
 - [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.

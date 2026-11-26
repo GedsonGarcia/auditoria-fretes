@@ -2,6 +2,7 @@ import type { CteAuditOutcome, CteRecord, FreightAmount } from "@/components/aud
 import { CUBAGE_FIELD, readValue, simulate } from "./freight-rules";
 import { GENERAL_LOCALITY, normalizeLocality } from "./square-localities";
 import { currentVersions, versionNumber, versionToForm, type VersionLike } from "./table-versions";
+import { describeWeightGap } from "./cte-mapping";
 
 /** Diferença até a qual o frete cobrado é considerado igual ao da tabela (arredondamento). */
 export const AUDIT_TOLERANCE = 0.01;
@@ -116,8 +117,7 @@ export function auditCte(record: CteRecord, ctx: AuditContext): CteRecord {
   if (record.freight.status !== "informed") return pending(record, "frete do CT-e não informado");
   if (record.merchandise.status !== "informed")
     return pending(record, "valor da mercadoria não informado");
-  if (!src.realWeightKg)
-    return pending(record, "peso não disponível no CT-e nem em todas as NF-es");
+  if (!src.realWeightKg) return pending(record, describeWeightGap(src.nfWeight));
   if (!src.issuedOn) return pending(record, "data de emissão não informada");
 
   const carrier = ctx.carriers.find((c) => digits(c.cnpj) === digits(src.carrierCnpj));

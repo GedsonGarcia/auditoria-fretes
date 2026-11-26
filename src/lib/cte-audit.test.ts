@@ -92,7 +92,8 @@ describe("Mapeamento com dados das tabelas bronze", () => {
       issuedOn: "2026-11-20",
     });
     const partial = mapSilverCte({ ...row, nf_com_peso: "1", nf_peso_bruto: "30" });
-    expect(partial.weight).toBe("Parcial: 30,00 em 1 de 2 NF-es");
+    expect(partial.weight).toBe("Sem peso em 1 de 2 NF-e(s)");
+    expect(partial.weight).not.toContain("30");
     expect(partial.source?.realWeightKg).toBeNull();
   });
 
@@ -193,5 +194,22 @@ describe("Auditoria automática do CT-e", () => {
     const semPeso = auditCte(mapSilverCte({ ...row, nf_com_peso: "1" }), context());
     expect(semPeso).toMatchObject({ auditOutcome: "pendente", audited: { status: "pending" } });
     expect(semPeso.calculationMemory).toContain("Nenhum valor foi estimado");
+    expect(semPeso.status).toContain("1 de 2 NF-e(s) sem peso");
+    const saidaAncora = auditCte(
+      mapSilverCte({
+        ...row,
+        nf_total: "3",
+        nf_com_peso: "0",
+        nf_peso_bruto: null,
+        nf_fora_base: "3",
+        nf_fora_base_ancora: "2",
+      }),
+      context(),
+    );
+    expect(saidaAncora.status).toBe(
+      "Pendente: peso indisponível: o CT-e não traz o peso real e 3 de 3 NF-e(s) sem peso; " +
+        "2 emitida(s) pela Rede ANCORA, fora da base de NF-e do Broker; 1 fora da base de NF-e do Broker",
+    );
+    expect(saidaAncora.weight).toBe("Sem peso em 3 de 3 NF-e(s)");
   });
 });
