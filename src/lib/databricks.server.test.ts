@@ -7,6 +7,7 @@ import {
   parseStatementResponse,
   readDatabricksConfig,
   runDatabricksQuery,
+  tokenHint,
 } from "./databricks.server";
 
 const config = { host: "adb-1.azuredatabricks.net", token: "t", warehouseId: "w" };
@@ -177,6 +178,37 @@ describe("Databricks — leitura da base de CT-es", () => {
     expect(fetchImpl.mock.calls.at(-1)![0]).toBe(
       "https://adb-1.azuredatabricks.net/api/2.0/sql/statements/s2/cancel",
     );
+  });
+
+  it("mostra a resposta original do Databricks e orienta conforme a recusa", async () => {
+    const refuse = (status: number, message: string) =>
+      runDatabricksQuery("SELECT 1", [], {
+        config,
+        fetchImpl: vi
+          .fn()
+          .mockResolvedValue(
+            new Response(JSON.stringify({ error_code: "X", message }), { status }),
+          ),
+      });
+    await expect(
+      refuse(403, "Source IP address: 1.2.3.4 is blocked by Databricks IP ACL for workspace: 1"),
+    ).rejects.toThrow(/HTTP 403: Source IP address.*lista de IPs/);
+    await expect(refuse(401, "Invalid access token.")).rejects.toThrow(/Token inválido/);
+    await expect(refuse(403, "Provided OAuth token does not have required scopes")).rejects.toThrow(
+      /escopo SQL completo/,
+    );
+  });
+
+  it("limpa o token colado e não o expõe", () => {
+    const env = {
+      DATABRICKS_HOST: "adb-1.azuredatabricks.net",
+      DATABRICKS_TOKEN: ' "Bearer dapi1234567890abcd"\n',
+      DATABRICKS_WAREHOUSE_ID: "/sql/1.0/warehouses/c71807e4901a1982",
+    };
+    const parsed = readDatabricksConfig(env);
+    expect(parsed.token).toBe("dapi1234567890abcd");
+    expect(parsed.warehouseId).toBe("c71807e4901a1982");
+    expect(tokenHint(parsed.token)).toBe("••••abcd");
   });
 
   it("explica acesso recusado", async () => {

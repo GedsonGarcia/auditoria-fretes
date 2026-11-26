@@ -18,6 +18,8 @@ export type CteSourceReport = {
   checkedAt: string;
   /** Falha antes de consultar as tabelas (host, token, warehouse ou tempo esgotado). */
   connectionError?: string;
+  /** Com o que o app tentou se conectar (sem segredos), para conferir os Secrets. */
+  connectionTarget?: string;
   tables: SourceTableReport[];
 };
 
@@ -62,6 +64,7 @@ export const inspectCteSource = createServerFn({ method: "POST" })
         missingSecrets: [],
         checkedAt,
         connectionError: message,
+        connectionTarget: `Host ${config.host} · Warehouse ${config.warehouseId} · Token em uso ${db.tokenHint(config.token)}`,
         tables: [],
       };
     }
