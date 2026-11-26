@@ -3,6 +3,9 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_RULES,
   describeRule,
+  missingFields,
+  TAC_FIXED_FIELD,
+  TAC_PERCENT_FIELD,
   simulate,
   type CommercialValues,
 } from "./freight-rules";
@@ -70,5 +73,74 @@ describe("describeRule", () => {
     expect(describeRule(gris, values).replace(/\u00a0/g, " ")).toBe(
       "Maior entre 0,3% × valor da NF e R$ 5,00",
     );
+  });
+});
+
+describe("TAC — adicional de frete", () => {
+  const input = { nf: 10000, pesoReal: 120, m3: 0.5, condicionais: false, aliquotaIcms: 0 };
+  const tac = DEFAULT_RULES.find((r) => r.key === "tac")!;
+  const run = (extra: CommercialValues) =>
+    simulate(input, { ...values, ...extra }, bands, DEFAULT_RULES, DEFAULT_CONFIG);
+
+  it("em %, cobra sobre o frete sem imposto (frete + taxas)", () => {
+    // frete sem imposto 196 × 10% = 19,60 → 215,60
+    const r = run({
+      [TAC_PERCENT_FIELD]: { value: "10", na: false },
+      [TAC_FIXED_FIELD]: { value: "", na: true },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(19.6);
+    expect(r.total).toBe(215.6);
+  });
+
+  // Exemplos da área de transporte: frete sem imposto R$ 40,00 e ICMS por dentro de 12%.
+  const flat = (tac: CommercialValues) =>
+    simulate(
+      { nf: 1000, pesoReal: 10, m3: 0, condicionais: false, aliquotaIcms: 12 },
+      { "FRETE MÍNIMO": { value: "40", na: false }, ...tac },
+      [],
+      DEFAULT_RULES,
+      { ...DEFAULT_CONFIG, icms: "por_dentro" },
+    );
+
+  it("TAC de 2% sobre R$ 40,00 = R$ 0,80; o ICMS incide sobre R$ 40,80", () => {
+    const r = flat({
+      [TAC_PERCENT_FIELD]: { value: "2", na: false },
+      [TAC_FIXED_FIELD]: { value: "", na: true },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(0.8);
+    expect(r.subtotal).toBe(40.8);
+    expect(r.icms).toBe(5.56); // 40,80 / 0,88 − 40,80
+    expect(r.total).toBe(46.36);
+  });
+
+  it("TAC de R$ 10,00 sobre R$ 40,00; o ICMS incide sobre R$ 50,00", () => {
+    const r = flat({
+      [TAC_PERCENT_FIELD]: { value: "", na: true },
+      [TAC_FIXED_FIELD]: { value: "10", na: false },
+    });
+    expect(r.subtotal).toBe(50);
+    expect(r.icms).toBe(6.82); // 50 / 0,88 − 50
+  });
+
+  it("em R$, cobra o valor fixo por CT-e", () => {
+    const r = run({
+      [TAC_PERCENT_FIELD]: { value: "", na: true },
+      [TAC_FIXED_FIELD]: { value: "25", na: false },
+    });
+    expect(r.lines.find((l) => l.key === "tac")?.value).toBe(25);
+    expect(r.total).toBe(221);
+    expect(
+      describeRule(tac, {
+        [TAC_PERCENT_FIELD]: { value: "", na: true },
+        [TAC_FIXED_FIELD]: { value: "25", na: false },
+      }).replace(/ /g, " "),
+    ).toBe("R$ 25,00 por CT-e");
+  });
+
+  it("vazia ou em tabelas antigas, não cobra e não aparece como faltando", () => {
+    const r = run({});
+    expect(r.lines.find((l) => l.key === "tac")).toBeUndefined();
+    expect(r.total).toBe(196);
+    expect(missingFields(tac, values)).toEqual([]);
   });
 });

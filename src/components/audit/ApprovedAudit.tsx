@@ -33,6 +33,7 @@ import {
 import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
 import { DualScroll } from "./DualScroll";
+import { TacCommercialCard } from "./TacCommercialCard";
 import type { CteRecord } from "./cte-detail-data";
 import {
   defaultCtePeriod,
@@ -53,6 +54,8 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_RULES,
   fieldUnit,
+  TAC_FIXED_FIELD,
+  TAC_PERCENT_FIELD,
   ruleToRecord,
   type CommercialValues,
   type FeeRule,
@@ -743,6 +746,15 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       return (
         <div key={key} className="comm-grid">
           {commercial.map((name, i) => {
+            if (name === TAC_FIXED_FIELD) return null;
+            if (name === TAC_PERCENT_FIELD)
+              return (
+                <TacCommercialCard
+                  key="tac"
+                  values={commercialValues}
+                  setCommercial={setCommercial}
+                />
+              );
             const item = commercialValues[name];
             return (
               <div className={`comm-card ${item?.na ? "is-na" : ""}`} key={name}>
