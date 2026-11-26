@@ -53,8 +53,8 @@ export function readDatabricksConfig(
     .replace(/\/.*$/, "");
   return {
     host,
-    token: env["DATABRICKS_TOKEN"]!.trim(),
-    warehouseId: env["DATABRICKS_WAREHOUSE_ID"]!.trim(),
+    token: cleanToken(env["DATABRICKS_TOKEN"]!),
+    warehouseId: env["DATABRICKS_WAREHOUSE_ID"]!.trim().replace(/^.*\/warehouses\//, ""),
   };
 }
 
@@ -66,8 +66,33 @@ type StatementResponse = {
   };
   result?: { data_array?: (string | null)[][] };
   message?: string;
+  error_code?: string;
   statement_id?: string;
 };
+
+/** Orientação conforme a recusa: IP bloqueado, token inválido ou falta de permissão. */
+export function explainRefusal(status: number, detail: string): string {
+  if (/ip acl|source ip|ip access list|blocked/i.test(detail))
+    return "O Databricks da empresa bloqueia acessos de fora da rede: peça ao time de dados para liberar o acesso do app (lista de IPs do workspace).";
+  if (status === 401 || /invalid access token|token.*(expired|invalid)|credential/i.test(detail))
+    return "Token inválido ou expirado: gere outro no Databricks e atualize o Secret DATABRICKS_TOKEN.";
+  if (/scope/i.test(detail))
+    return "O token não tem o escopo necessário: gere um token com escopo SQL completo.";
+  return "Confira se o token tem acesso ao SQL Warehouse informado e SELECT nas tabelas.";
+}
+
+/** Final do token para conferir qual está em uso, sem expor o valor. */
+export function tokenHint(token: string): string {
+  return token.length > 8 ? `••••${token.slice(-4)}` : "••••";
+}
+
+/** Limpa formatações comuns ao colar o token: espaços, quebras, aspas e "Bearer ". */
+export function cleanToken(value: string): string {
+  return value
+    .replace(/\s+/g, "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/^Bearer/i, "");
+}
 
 /** Converte a resposta JSON_ARRAY do Databricks em linhas nomeadas. */
 export function parseStatementResponse(body: StatementResponse): QueryResult {
@@ -118,14 +143,25 @@ export async function runDatabricksQuery(
         "Não foi possível alcançar o Databricks. Confira o DATABRICKS_HOST.",
       );
     }
+    const raw = await response.text().catch(() => "");
+    let body: StatementResponse = {};
+    try {
+      body = raw ? (JSON.parse(raw) as StatementResponse) : {};
+    } catch {
+      body = {};
+    }
+    // Resposta original do Databricks (sem o token), para diagnosticar recusas.
+    const detail = (body.message ?? body.error_code ?? raw)
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
     if (response.status === 401 || response.status === 403)
       throw new DatabricksError(
-        "O Databricks recusou o acesso. Confira o DATABRICKS_TOKEN, o uso do SQL Warehouse e as permissões de SELECT nas tabelas.",
+        `O Databricks recusou o acesso (HTTP ${response.status}${detail ? `: ${detail}` : ""}). ${explainRefusal(response.status, detail)}`,
       );
-    const body = (await response.json().catch(() => ({}))) as StatementResponse;
     if (!response.ok)
       throw new DatabricksError(
-        `Databricks respondeu ${response.status}: ${body.message ?? "erro sem detalhe"}`,
+        `Databricks respondeu ${response.status}: ${detail || "erro sem detalhe"}`,
       );
     return body;
   };

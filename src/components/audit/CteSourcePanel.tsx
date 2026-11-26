@@ -75,6 +75,12 @@ export function CteSourcePanel({ admin }: { admin: boolean }) {
       {report?.connectionError && (
         <p className="empty" role="alert">
           {report.connectionError}
+          {report.connectionTarget && (
+            <>
+              <br />
+              <small>Tentativa com: {report.connectionTarget}</small>
+            </>
+          )}
         </p>
       )}
       {error && (
