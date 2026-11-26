@@ -7,7 +7,8 @@
 - [x] Adicionar Configurações ao rodapé do menu, com formulários de usuários e filiais, acesso ao cadastro existente de transportadoras e parâmetros previstos no escopo.
 - [x] Preparar detalhamento flutuante do CT-e com decomposição lado a lado e acesso ao DACTE real; testes com registros isolados, sem dados fictícios no painel.
 - [x] Atualizar apresentação conforme a referência enviada e validar navegação, formulários, recolhimento do menu e tamanhos de tela; sete testes aprovados e nenhuma falha observada no navegador.
-- [ ] Consultar CT-es/DACTEs reais — aguarda acesso à fonte original; o banco de cadastros está conectado, mas não substitui os documentos originais.
+- [x] Consultar CT-es reais — fato silver do Broker no Databricks, só CT-es com a Rede ANCORA tomadora (raiz do CNPJ em `003_broker_nfe_bronze.cds_ancora`).
+- [ ] DACTE em PDF — o Databricks não guarda XML nem PDF de CT-e (`documento_distribuicao_cte_dfe` só tem NSU e metadados). Aguarda o time de dados ingerir o XML (docZip da distribuição DF-e) ou indicar a origem do arquivo no Broker; o app gera ou abre o DACTE a partir daí.
 
 - [x] Diagnosticar o projeto disponível e analisar o escopo e os logotipos enviados.
 - [x] Confirmar onde está a base original de CT-es — usuário informou que está em uma base externa existente.
