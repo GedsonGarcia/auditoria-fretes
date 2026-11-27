@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState, type ReactNode } from "react";
+import { createElement, Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +34,13 @@ import { AuditSettings } from "./AuditSettings";
 import { CteDetails, CteRows } from "./CteDetails";
 import { DualScroll } from "./DualScroll";
 import { TacCommercialCard } from "./TacCommercialCard";
+import { RegionBar } from "./RegionBar";
+import {
+  bandsToRecord,
+  commercialToRecord,
+  regionsFromVersion,
+  regionsToRecord,
+} from "@/lib/table-regions";
 import type { CteRecord } from "./cte-detail-data";
 import {
   defaultCtePeriod,
@@ -242,6 +249,12 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [commercialValues, setCommercialValues] = useState<CommercialValues>({});
+  // Regiões da tabela: a aba ativa fica em commercialValues/bands; as demais, em regionSlots
+  // ("" = valores padrão, fora das regiões).
+  type RegionSlot = { values: CommercialValues; bands: { weight: string; value: string }[] };
+  const [regionSlots, setRegionSlots] = useState<Record<string, RegionSlot>>({});
+  const [regionOrder, setRegionOrder] = useState<string[]>([]);
+  const [activeRegion, setActiveRegion] = useState("");
   const [rules, setRules] = useState<FeeRule[]>(() => DEFAULT_RULES.map((r) => ({ ...r })));
   const [freightConfig, setFreightConfig] = useState<FreightConfig>(DEFAULT_CONFIG);
   const [tableSearch, setTableSearch] = useState("");
@@ -309,6 +322,12 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     setRules(form?.rules ?? DEFAULT_RULES.map((r) => ({ ...r })));
     setFreightConfig(form?.config ?? DEFAULT_CONFIG);
     setBands(form?.bands ?? [{ weight: "", value: "" }]);
+    const regions = version ? regionsFromVersion(version) : [];
+    setRegionSlots(
+      Object.fromEntries(regions.map((r) => [r.squareId, { values: r.values, bands: r.bands }])),
+    );
+    setRegionOrder(regions.map((r) => r.squareId));
+    setActiveRegion("");
     setEditingVersion(version?.id ?? null);
     setFilters((old) => ({ ...old, "rule-carrier": version?.carrier_id ?? "" }));
     setTab("commercial");
@@ -367,6 +386,45 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
   };
   const dark = themeMode === "dark" || (themeMode === "system" && systemDark);
   const [bands, setBands] = useState([{ weight: "", value: "" }]);
+  const copySlot = (slot: RegionSlot): RegionSlot => ({
+    values: Object.fromEntries(Object.entries(slot.values).map(([k, v]) => [k, { ...v }])),
+    bands: slot.bands.map((b) => ({ ...b })),
+  });
+  /** Todas as regiões, incluindo a aba que está na tela. */
+  const allRegionSlots = () => ({
+    ...regionSlots,
+    [activeRegion]: { values: commercialValues, bands },
+  });
+  const showRegion = (id: string, slots: Record<string, RegionSlot>) => {
+    const slot = slots[id] ?? { values: {}, bands: [{ weight: "", value: "" }] };
+    const { [id]: _shown, ...rest } = slots;
+    setRegionSlots(rest);
+    setCommercialValues(slot.values);
+    setBands(slot.bands.length ? slot.bands : [{ weight: "", value: "" }]);
+    setActiveRegion(id);
+  };
+  const selectRegion = (id: string) => {
+    if (id !== activeRegion) showRegion(id, allRegionSlots());
+  };
+  const addRegion = (id: string) => {
+    if (!id || regionOrder.includes(id)) return;
+    const slots = allRegionSlots();
+    setRegionOrder((old) => [...old, id]);
+    showRegion(id, { ...slots, [id]: copySlot({ values: commercialValues, bands }) });
+  };
+  const removeRegion = (id: string) => {
+    if (!window.confirm("Remover esta região da tabela? Os valores dela serão descartados ao salvar."))
+      return;
+    const { [id]: _removed, ...slots } = allRegionSlots();
+    setRegionOrder((old) => old.filter((r) => r !== id));
+    showRegion(activeRegion === id ? "" : activeRegion, slots);
+  };
+  const squareLabel = (sq: { id: string; name: string; state: string }) =>
+    `${sq.name} · ${sq.state}${
+      data.localities.some((l) => l.square_id === sq.id && l.name === GENERAL_LOCALITY)
+        ? " (Geral)"
+        : ""
+    }`;
   const unavailable = () =>
     setMessage(
       "A conciliação depende da base original de CT-es e das regras de cálculo. Os cadastros e a importação estão disponíveis para usuários autorizados.",
@@ -381,17 +439,14 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
       if (id === "save-carrier") {
         await save({ kind: "carrier", value: { id: field("carrier-edit-id") || undefined, legal_name: field("carrier-legal"), cnpj: field("carrier-cnpj"), display_name: field("carrier-short"), active: field("carrier-active") !== "Inativa" && field("carrier-active") !== "Inativo" } });
       } else if (id === "save-rule") {
-        const commercialRecord = Object.fromEntries(
-          commercial.map((name) => {
-            const item = commercialValues[name];
-            const raw = item?.value.trim() ?? "";
-            const value = raw === "" ? NaN : Number(raw.replace(",", "."));
-            const state = item?.na ? "not_applicable" : Number.isFinite(value) ? "provided" : "missing";
-            return [name, { value: state === "provided" ? value : null, state }];
-          }),
+        const slots = allRegionSlots();
+        const base = slots[""] ?? { values: {}, bands: [] };
+        const commercialRecord = commercialToRecord(base.values);
+        const regions = regionsToRecord(
+          regionOrder.map((squareId) => ({ squareId, ...(slots[squareId] ?? { values: {}, bands: [] }) })),
         );
-        const calculation_rules = rules.map((r) => ruleToRecord(r, commercialValues));
-        await save({ kind: "version", value: { carrier_id: field("rule-carrier"), branch_id: field("rule-branch"), square_id: field("rule-square") || null, destination: field("rule-destination"), valid_from: field("rule-start"), valid_until: field("rule-end") || null, commercial: commercialRecord, calculation_rules, weight_bands: bands.filter((b) => b.weight || b.value).map((b) => ({ weight: b.weight ? Number(b.weight) : NaN, value: b.value ? Number(b.value) : NaN })), configuration: { max_freight: freightConfig.composicao === "maior", mode: field("rule-mode"), min_goods: field("rule-min-goods") ? Number(field("rule-min-goods")) : null, peso_considerado: freightConfig.peso, composicao: freightConfig.composicao, frete_minimo_sobre: freightConfig.minimoSobre, icms: freightConfig.icms, weight_integration: "faixa_peso_com_excedente" }, notes: field("rule-notes"), previous_version_id: field("rule-edit-id") || null } });
+        const calculation_rules = rules.map((r) => ruleToRecord(r, base.values));
+        await save({ kind: "version", value: { carrier_id: field("rule-carrier"), branch_id: field("rule-branch"), square_id: field("rule-square") || null, destination: field("rule-destination"), valid_from: field("rule-start"), valid_until: field("rule-end") || null, commercial: commercialRecord, calculation_rules, weight_bands: bandsToRecord(base.bands), regions, configuration: { max_freight: freightConfig.composicao === "maior", mode: field("rule-mode"), min_goods: field("rule-min-goods") ? Number(field("rule-min-goods")) : null, peso_considerado: freightConfig.peso, composicao: freightConfig.composicao, frete_minimo_sobre: freightConfig.minimoSobre, icms: freightConfig.icms, weight_integration: "faixa_peso_com_excedente" }, notes: field("rule-notes"), previous_version_id: field("rule-edit-id") || null } });
       } else if (file) {
         const count = await importFile(file);
         setMessage(`${count} fatura(s) importada(s). Associação aos CT-es e auditoria pendentes.`);
@@ -744,7 +799,19 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
     if (cls === "nav-ico" || id === "toast") return null;
     if (id === "commercial-components")
       return (
-        <div key={key} className="comm-grid">
+        <Fragment key={key}>
+        <RegionBar
+          regions={regionOrder}
+          active={activeRegion}
+          canWrite={canWrite}
+          squares={data.squares
+            .filter((sq) => sq.carrier_id === filters["rule-carrier"] || regionOrder.includes(sq.id))
+            .map((sq) => ({ id: sq.id, label: squareLabel(sq) }))}
+          onSelect={selectRegion}
+          onAdd={addRegion}
+          onRemove={removeRegion}
+        />
+        <div className="comm-grid">
           {commercial.map((name, i) => {
             if (name === TAC_FIXED_FIELD) return null;
             if (name === TAC_PERCENT_FIELD)
@@ -786,6 +853,7 @@ export function ApprovedAudit({ view, ctes = [] }: { view: AuditView; ctes?: Cte
             );
           })}
         </div>
+        </Fragment>
       );
     if (id === "weightRows")
       return (

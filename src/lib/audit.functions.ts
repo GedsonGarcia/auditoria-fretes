@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { mutationSchema, importSchema, squareImportSchema } from "./audit-schemas";
+import {
+  mutationSchema,
+  importSchema,
+  squareImportSchema,
+  squareUpdateSchema,
+  squareDeleteSchema,
+} from "./audit-schemas";
 import { parseInvoiceCsv } from "./invoice-csv";
 
 export const readAuditData = createServerFn({ method: "POST" })
@@ -137,4 +143,44 @@ export const saveSquare = createServerFn({ method: "POST" })
           : "Não foi possível salvar a praça. Nenhuma localidade foi alterada.",
       );
     return { id: result.data };
+  });
+
+export const updateSquare = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => squareUpdateSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase.rpc("audit_update_square", {
+      _id: data.id,
+      _name: data.name,
+      _state: data.state,
+      _carrier_id: data.carrier_id,
+      ...(data.localities ? { _localities: data.localities } : {}),
+    });
+    if (result.error)
+      throw new Error(
+        {
+          "42501": "Seu perfil não possui permissão para alterar praças.",
+          "23505": "Já existe outra praça com este nome, UF e transportadora.",
+          "23514": "Esta praça é usada em tabela de frete: a transportadora não pode ser trocada.",
+          P0002: "Praça não encontrada. Atualize a tela.",
+        }[result.error.code] ?? "Não foi possível salvar a edição. Nada foi alterado.",
+      );
+    return { id: result.data };
+  });
+
+export const deleteSquare = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((value: unknown) => squareDeleteSchema.parse(value))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase.rpc("audit_delete_square", { _id: data.id });
+    if (result.error)
+      throw new Error(
+        {
+          "42501": "Seu perfil não possui permissão para excluir praças.",
+          "23503":
+            "Esta praça é usada em uma tabela de frete (praça ou região). Remova-a da tabela antes de excluir.",
+          P0002: "Praça não encontrada. Atualize a tela.",
+        }[result.error.code] ?? "Não foi possível excluir a praça. Nada foi alterado.",
+      );
+    return { deleted: true };
   });

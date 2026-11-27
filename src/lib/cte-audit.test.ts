@@ -213,3 +213,73 @@ describe("Auditoria automática do CT-e", () => {
     expect(saidaAncora.weight).toBe("Sem peso em 3 de 3 NF-e(s)");
   });
 });
+
+describe("Tabela única com valores por região", () => {
+  // Mesma tabela (sem praça): padrão com GRIS 0,3%; região Itajaí com GRIS 1% e faixa de R$ 60.
+  const regional = version({
+    square_id: null,
+    regions: [
+      {
+        square_id: "sq-itajai",
+        commercial: {
+          "FRETE VALOR (% SOBRE $ NF)": { value: 1, state: "provided" },
+          "GRIS (% SOBRE $ NF)": { value: 1, state: "provided" },
+          PEDÁGIO: { value: 5, state: "provided" },
+        },
+        weight_bands: [{ weight: 100, value: 60 }],
+      },
+    ],
+  });
+
+  it("usa os valores da região que atende a cidade de origem", () => {
+    // 60 + 10 (1% de 1.000) + 10 (GRIS 1%) + 5 (pedágio) = 85
+    const audited = auditCte(mapSilverCte(row), context([regional]));
+    expect(audited.audited).toEqual({ status: "informed", value: 85 });
+    expect(audited.tableVersion).toContain("região Itajaí · SC");
+  });
+
+  it("fora das regiões, usa os valores padrão da mesma tabela", () => {
+    const audited = auditCte(
+      mapSilverCte({
+        ...row,
+        remetente_municipio: "JOINVILLE",
+        remetente_uf: "PR",
+        sg_uf_inicio: "PR",
+      }),
+      context([regional]),
+    );
+    expect(audited.audited).toEqual({ status: "informed", value: 68 });
+    expect(audited.tableVersion).toContain("valores padrão (fora das regiões)");
+  });
+
+  it("tabela só com regiões fica pendente quando nenhuma atende a localidade", () => {
+    const onlyRegions = { ...regional, commercial: {}, weight_bands: [] };
+    const audited = auditCte(
+      mapSilverCte({
+        ...row,
+        remetente_municipio: "JOINVILLE",
+        remetente_uf: "PR",
+        sg_uf_inicio: "PR",
+      }),
+      context([onlyRegions]),
+    );
+    expect(audited.auditOutcome).toBe("pendente");
+    expect(audited.status).toContain("nenhuma região da tabela atende JOINVILLE / PR");
+  });
+
+  it("cidade listada vence a região geral da UF", () => {
+    const both = version({
+      square_id: null,
+      regions: [
+        { square_id: "sq-sc", commercial: {}, weight_bands: [] },
+        ...(regional.regions as unknown[]),
+      ],
+    });
+    const found = findTableVersion(context([both]), "c1", "b1", "2026-11-20", {
+      city: "Itajaí",
+      state: "SC",
+    });
+    expect(found.match?.region?.squareId).toBe("sq-itajai");
+    expect(found.match?.level).toBe(3);
+  });
+});

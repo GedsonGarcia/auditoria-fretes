@@ -4134,3 +4134,101 @@ body:has(.theme-dark) {
   grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
   gap: 6px;
 }
+
+/* Praças: ações de edição e exclusão. */
+.square-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.square-actions .square-delete {
+  color: var(--red, #ce0e2d);
+}
+tr.square-editing td {
+  background: rgba(0, 58, 93, 0.06);
+}
+
+/* Regiões da tabela comercial (valores por praça na mesma tabela). */
+.region-bar {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.region-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.region-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--approved-31, #9aa2a5);
+  border-radius: 999px;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.region-tab button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.region-tab.active {
+  background: var(--blue, #003a5d);
+  border-color: var(--blue, #003a5d);
+  color: #fff;
+}
+.region-tab .region-remove {
+  display: inline-flex;
+  margin-left: 4px;
+  opacity: 0.75;
+}
+.region-tab .region-remove svg {
+  width: 12px;
+  height: 12px;
+}
+.region-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.region-add select {
+  min-width: 220px;
+  height: 30px;
+  font-size: 11px;
+}
+.region-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--blue, #003a5d);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--blue, #003a5d);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.region-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.region-add-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.region-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--approved-67, #4b4f54);
+}
