@@ -3,6 +3,7 @@ import { CUBAGE_FIELD, readValue, simulate } from "./freight-rules";
 import { GENERAL_LOCALITY, normalizeLocality } from "./square-localities";
 import { currentVersions, versionNumber, versionToForm, type VersionLike } from "./table-versions";
 import { describeWeightGap } from "./cte-mapping";
+import { hasProvidedValues, regionsFromVersion, type RegionForm } from "./table-regions";
 
 /** Diferença até a qual o frete cobrado é considerado igual ao da tabela (arredondamento). */
 export const AUDIT_TOLERANCE = 0.01;
@@ -12,6 +13,8 @@ export type AuditVersion = VersionLike & {
   square_id: string | null;
   valid_from: string;
   valid_until: string | null;
+  /** Valores por região (praça) dentro da mesma tabela. */
+  regions?: unknown;
 };
 export type AuditContext = {
   carriers: { id: string; cnpj: string; legal_name: string; display_name: string }[];
@@ -60,12 +63,34 @@ function pending(record: CteRecord, reason: string): CteRecord {
   };
 }
 
-type Match = { version: AuditVersion; level: number; square?: AuditContext["squares"][number] };
+type Square = AuditContext["squares"][number];
+type Match = {
+  version: AuditVersion;
+  level: number;
+  square?: Square | undefined;
+  region?: RegionForm | undefined;
+};
+
+/** Quanto a praça atende a localidade: 3 = cidade listada, 2 = praça "Geral" da UF. */
+function squareLevel(
+  ctx: AuditContext,
+  squareId: string,
+  city: string,
+  state: string,
+): { level: number; square: Square } | null {
+  const square = ctx.squares.find((s) => s.id === squareId);
+  if (!square || square.state.trim().toUpperCase() !== state) return null;
+  const names = ctx.localities.filter((l) => l.square_id === square.id).map((l) => l.name);
+  if (city && names.some((n) => normalizeLocality(n) === city)) return { level: 3, square };
+  if (names.includes(GENERAL_LOCALITY)) return { level: 2, square };
+  return null;
+}
 
 /**
  * Tabela vigente para o CT-e: mesma transportadora e filial, vigência cobrindo a data de
  * emissão, e praça da outra ponta da rota (localidade exata > praça "Geral" da UF >
- * tabela sem praça). Mais de uma tabela no mesmo nível fica pendente, sem escolher.
+ * tabela sem praça). Dentro da tabela, a região (praça) que atende a localidade define os
+ * valores; sem região, valem os valores padrão da tabela. Empate fica pendente, sem escolher.
  */
 export function findTableVersion(
   ctx: AuditContext,
@@ -86,16 +111,20 @@ export function findTableVersion(
   const state = place.state.trim().toUpperCase();
   const matches: Match[] = [];
   for (const version of candidates) {
-    if (!version.square_id) {
-      matches.push({ version, level: 1 });
-      continue;
-    }
-    const square = ctx.squares.find((s) => s.id === version.square_id);
-    if (!square || square.state.trim().toUpperCase() !== state) continue;
-    const names = ctx.localities.filter((l) => l.square_id === square.id).map((l) => l.name);
-    if (city && names.some((n) => normalizeLocality(n) === city))
-      matches.push({ version, level: 3, square });
-    else if (names.includes(GENERAL_LOCALITY)) matches.push({ version, level: 2, square });
+    const base = version.square_id ? squareLevel(ctx, version.square_id, city, state) : null;
+    if (version.square_id && !base) continue;
+    const regionHits = regionsFromVersion(version).flatMap((region) => {
+      const hit = squareLevel(ctx, region.squareId, city, state);
+      return hit ? [{ version, level: hit.level, square: hit.square, region }] : [];
+    });
+    const topRegion = Math.max(0, ...regionHits.map((m) => m.level));
+    const bestRegions = regionHits.filter((m) => m.level === topRegion);
+    if (bestRegions.length > 1)
+      return { reason: "mais de uma região da tabela atende a localidade" };
+    const baseLevel = base?.level ?? 1;
+    // A região vale quando atende a localidade tão bem quanto (ou melhor que) a tabela.
+    if (bestRegions[0] && topRegion >= baseLevel) matches.push(bestRegions[0]);
+    else matches.push({ version, level: baseLevel, square: base?.square });
   }
   if (!matches.length)
     return { reason: `nenhuma praça da tabela atende ${place.city || "?"} / ${state || "?"}` };
@@ -135,8 +164,16 @@ export function auditCte(record: CteRecord, ctx: AuditContext): CteRecord {
 
   const found = findTableVersion(ctx, carrier.id, branch.id, src.issuedOn, place);
   if (!found.match) return pending(record, found.reason ?? "tabela não identificada");
-  const { version, square } = found.match;
+  const { version, square, region } = found.match;
   const form = versionToForm(version);
+  if (region) {
+    form.values = region.values;
+    form.bands = region.bands;
+  } else if (regionsFromVersion(version).length && !hasProvidedValues(form.values))
+    return pending(
+      record,
+      `nenhuma região da tabela atende ${place.city || "?"} / ${place.state || "?"}`,
+    );
   if (form.config.icms === "por_dentro")
     return pending(record, "tabela com ICMS por dentro e alíquota não disponível na origem");
 
@@ -209,7 +246,11 @@ export function auditCte(record: CteRecord, ctx: AuditContext): CteRecord {
     .filter(Boolean)
     .join("\n");
 
-  const placeLabel = square ? `praça ${square.name} · ${square.state}` : "todas as praças";
+  const placeLabel = square
+    ? `${region ? "região" : "praça"} ${square.name} · ${square.state}`
+    : regionsFromVersion(version).length
+      ? "valores padrão (fora das regiões)"
+      : "todas as praças";
   const validity = `${dateBr(version.valid_from)} a ${version.valid_until ? dateBr(version.valid_until) : "sem término"}`;
   const statusText = {
     conforme: "Conforme a tabela",

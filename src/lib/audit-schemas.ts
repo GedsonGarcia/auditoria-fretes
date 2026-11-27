@@ -15,7 +15,17 @@ export const squareImportSchema = z.object({
     .min(1, "Nenhuma localidade encontrada na área de transferência.")
     .max(5000, "A lista passa do limite de 5.000 localidades."),
 });
-export const versionSchema = z.object({ carrier_id: z.string().uuid(), branch_id: z.string().uuid(), square_id: z.string().uuid().nullable(), destination: z.string().max(200), valid_from: date, valid_until: date.nullable(), commercial: z.record(z.object({ value: z.number().nonnegative().nullable(), state: z.enum(["provided", "missing", "not_applicable"]) })), calculation_rules: z.array(z.record(z.string().max(1000))), weight_bands: z.array(z.object({ weight: z.number().positive(), value: z.number().nonnegative() })), configuration: z.record(z.union([z.string().max(1000), z.boolean(), z.number().nonnegative(), z.null()])), notes: z.string().max(2000), previous_version_id: z.string().uuid().nullable() }).refine((v) => !v.valid_until || v.valid_until >= v.valid_from, "O fim da vigência deve ser posterior ao início.");
+const commercialSchema = z.record(z.object({ value: z.number().nonnegative().nullable(), state: z.enum(["provided", "missing", "not_applicable"]) }));
+const bandsSchema = z.array(z.object({ weight: z.number().positive(), value: z.number().nonnegative() }));
+/** Valores por região (praça) dentro da mesma tabela de frete. */
+const regionSchema = z.object({ square_id: z.string().uuid("Selecione a praça da região."), commercial: commercialSchema, weight_bands: bandsSchema });
+export const squareUpdateSchema = squareImportSchema.extend({
+  id: z.string().uuid(),
+  /** Sem lista, mantém as localidades atuais e altera só nome, UF e transportadora. */
+  localities: squareImportSchema.shape.localities.optional(),
+});
+export const squareDeleteSchema = z.object({ id: z.string().uuid() });
+export const versionSchema = z.object({ carrier_id: z.string().uuid(), branch_id: z.string().uuid(), square_id: z.string().uuid().nullable(), destination: z.string().max(200), valid_from: date, valid_until: date.nullable(), commercial: commercialSchema, calculation_rules: z.array(z.record(z.string().max(1000))), weight_bands: bandsSchema, regions: z.array(regionSchema).max(200).refine((list) => new Set(list.map((r) => r.square_id)).size === list.length, "A mesma praça aparece em mais de uma região.").default([]), configuration: z.record(z.union([z.string().max(1000), z.boolean(), z.number().nonnegative(), z.null()])), notes: z.string().max(2000), previous_version_id: z.string().uuid().nullable() }).refine((v) => !v.valid_until || v.valid_until >= v.valid_from, "O fim da vigência deve ser posterior ao início.");
 export const mutationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("carrier"), value: carrierSchema }),
   z.object({ kind: z.literal("branch"), value: branchSchema }),
